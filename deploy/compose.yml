@@ -1,0 +1,58 @@
+services:
+  signaling:
+    build:
+      context: ..
+    restart: unless-stopped
+    expose: ["21120"]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    read_only: true
+    mem_limit: 256m
+    pids_limit: 64
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment:
+      DESK_DOMAIN: ${DESK_DOMAIN:?请在 deploy/.env 中设置域名}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      signaling:
+        condition: service_healthy
+  turn:
+    image: coturn/coturn:4.18.0
+    restart: unless-stopped
+    network_mode: host
+    command:
+      - -n
+      - --log-file=stdout
+      - --lt-cred-mech
+      - --fingerprint
+      - --no-cli
+      - --no-tls
+      - --no-dtls
+      - --no-multicast-peers
+      - --no-tcp-relay
+      - --listening-port=3478
+      - --min-port=49160
+      - --max-port=49259
+      - --realm=${DESK_DOMAIN}
+      - --external-ip=${PUBLIC_IP:?请设置服务器公网 IPv4}
+      - --user=${TURN_USERNAME:?请设置 TURN 用户名}:${TURN_PASSWORD:?请设置随机 TURN 密码}
+      - --user-quota=12
+      - --total-quota=100
+      - --denied-peer-ip=0.0.0.0-0.255.255.255
+      - --denied-peer-ip=10.0.0.0-10.255.255.255
+      - --denied-peer-ip=127.0.0.0-127.255.255.255
+      - --denied-peer-ip=169.254.0.0-169.254.255.255
+      - --denied-peer-ip=172.16.0.0-172.31.255.255
+      - --denied-peer-ip=192.168.0.0-192.168.255.255
+      - --denied-peer-ip=::1
+      - --denied-peer-ip=fc00::-fdff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+      - --denied-peer-ip=fe80::-febf:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+volumes:
+  caddy_data:
+  caddy_config:

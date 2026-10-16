@@ -1,0 +1,9 @@
+node_modules
+dist
+.git
+.env
+.env.*
+deploy/.env
+test-results
+playwright-report
+native

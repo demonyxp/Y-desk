@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' blob:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>Y-Desk · 双屏远程桌面</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="renderer.js" defer></script>
+</head>
+<body>
+  <header class="app-header">
+    <div class="brand"><span class="brand-mark" aria-hidden="true">Y</span><span>Y-Desk<small>让两块屏幕，一起抵达。</small></span></div>
+    <div class="status" role="status"><i id="status-dot"></i><span id="status">未连接</span></div>
+  </header>
+  <main>
+    <section id="setup">
+      <div class="intro"><div><p class="eyebrow">你的桌面，触手可及</p><h1>跨越距离，保留细节。</h1><p>共享正在使用的桌面。单屏专注，双屏协作。</p></div><div class="screen-symbol" aria-hidden="true"><span></span><span></span></div></div>
+      <details class="network" id="network-settings" open>
+        <summary>连接服务器 <span id="server-summary">首次使用，请配置同一个服务器</span></summary>
+        <div class="network-fields">
+          <label>信令服务器<input id="server" placeholder="wss://desk.example.com" value="ws://127.0.0.1:21120" spellcheck="false"></label>
+          <label>STUN / TURN 配置 <span class="muted">JSON，可留空用于局域网</span><textarea id="ice" rows="2" spellcheck="false" placeholder='[{"urls":"stun:stun.example.com:3478"}]'></textarea></label>
+        </div>
+        <p class="hint">公网使用 wss:// 和 TURN 中继；本机测试可用默认地址。TURN 凭据仅在本次运行中保留。</p>
+      </details>
+      <div class="connection-grid">
+        <section class="panel host-panel">
+          <div class="panel-title"><span class="section-icon" aria-hidden="true">↗</span><div><h2>共享这台电脑</h2><p>选择 1–2 块屏幕，收到请求后再确认。</p></div></div>
+          <div class="screen-list" id="screens"><p class="muted">正在读取显示器…</p></div>
+          <div class="host-actions"><button id="share" class="primary">开启共享</button><button id="refresh" class="text-button">刷新屏幕</button></div>
+          <div id="identity" class="identity" hidden>
+            <span class="field-label">本次设备码</span><strong id="device-id"></strong>
+            <label>访问密钥 <input id="device-secret" readonly type="password" autocomplete="off"></label>
+            <div class="identity-actions"><button id="show-secret" class="text-button">显示密钥</button><button id="copy-invite" class="secondary">复制连接信息</button></div>
+            <p class="hint">仅发给信任的人。关闭共享后，设备码和密钥自动失效。</p>
+          </div>
+        </section>
+        <section class="panel viewer-panel">
+          <div class="panel-title"><span class="section-icon" aria-hidden="true">↙</span><div><h2>连接另一台电脑</h2><p>输入对方的连接信息，等待对方允许。</p></div></div>
+          <form id="join-form">
+            <label>对方设备码<input id="remote-id" placeholder="9 位设备码" inputmode="numeric" maxlength="11" required autocomplete="off"></label>
+            <label>访问密钥<input id="remote-secret" placeholder="对方提供的 32 位密钥" type="password" maxlength="32" required autocomplete="off" spellcheck="false"></label>
+            <button id="join" class="primary" type="submit">连接桌面 <span aria-hidden="true">→</span></button>
+          </form>
+          <div class="privacy-note"><span aria-hidden="true">◎</span><p>对方确认后才会共享画面与控制权。<br>连接中，双方随时可以结束。</p></div>
+        </section>
+      </div>
+    </section>
+
+    <section id="request" class="request-banner" hidden aria-live="polite">
+      <div><strong>有人请求查看并控制你的桌面</strong><p>请先通过电话或聊天确认对方身份。允许后将共享选中的屏幕及键盘鼠标控制权。</p></div>
+      <button id="reject" class="secondary">拒绝</button><button id="accept" class="primary">允许本次连接</button>
+    </section>
+    <section id="host-active" class="host-active" hidden><div class="live-dot"></div><div><h2>你的桌面正在共享</h2><p>对方可以查看和控制选中的显示器。本机仍可正常操作。</p><p class="hint">紧急停止并退出：Ctrl + Alt + F12</p></div></section>
+
+    <section id="session" hidden>
+      <div class="session-toolbar">
+        <div><h2>远程桌面</h2><span id="session-detail" class="muted">正在建立视频连接…</span></div>
+        <div class="session-controls">
+          <label class="compact">显示<select id="layout"><option value="all">双屏并排</option></select></label>
+          <label class="compact">画质<select id="quality"><option value="smooth">流畅 · 1080p / 30</option><option value="balanced" selected>高清 · 1440p / 60</option><option value="ultra">原画 · 4K / 60</option></select></label>
+          <button id="control-toggle" class="secondary" aria-pressed="true">控制已开启</button>
+          <button id="fullscreen" class="secondary">全屏</button>
+        </div>
+      </div>
+      <div id="videos" class="videos"></div>
+      <div class="session-footer"><p>点击画面控制 · Ctrl + Alt + Esc 释放键盘 · 不支持 UAC 安全桌面</p><span id="stats" aria-live="off">等待视频数据…</span></div>
+      <details class="text-transfer"><summary>发送中文或长文本</summary><div><textarea id="remote-text" maxlength="2000" placeholder="先点击远端输入框，再在这里填写文字。最多 2000 字。"></textarea><button id="send-text" class="secondary">输入到远端</button></div></details>
+    </section>
+    <div class="bottom-actions"><p id="notice" role="status" aria-live="polite">画面经 WebRTC 加密传输。实际清晰度与流畅度取决于网络及硬件。</p><button id="stop" class="danger" hidden>停止共享 / 断开</button></div>
+  </main>
+  <footer class="app-footer"><span>Y-DESK / WINDOWS</span><span>双屏 · 实时 · 由你掌控</span><span>v0.1.0</span></footer>
+</body>
+</html>

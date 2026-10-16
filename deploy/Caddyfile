@@ -1,0 +1,7 @@
+{$DESK_DOMAIN} {
+    reverse_proxy signaling:21120
+    header {
+        X-Content-Type-Options nosniff
+        Referrer-Policy no-referrer
+    }
+}
