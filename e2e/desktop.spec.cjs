@@ -44,15 +44,17 @@ for (const syntheticDual of [false, true]) test(syntheticDual ? '双屏模拟：
     }
     const screenCount = Math.min(2, await host.page.locator('.screen-card').count());
     await host.page.screenshot({ path: testInfo.outputPath('home.png') });
+    const password = 'Desk-Test#2026';
+    await host.page.locator('#host-password').fill(password);
     await host.page.locator('#share').click();
     await expect(host.page.locator('#device-id')).toHaveText(/\d{3} \d{3} \d{3}/);
     const id = (await host.page.locator('#device-id').textContent()).replace(/\s/g, '');
-    const secret = await host.page.locator('#device-secret').inputValue();
     await host.app.evaluate(({ clipboard }) => { clipboard.writeText = value => { globalThis.testCopiedInvite = value; }; });
     await host.page.locator('#copy-invite').click();
-    expect(await host.app.evaluate(() => globalThis.testCopiedInvite)).toContain(secret);
+    expect(await host.app.evaluate(() => globalThis.testCopiedInvite)).toContain(id);
+    expect(await host.app.evaluate(() => globalThis.testCopiedInvite)).not.toContain(password);
     await viewer.page.locator('#remote-id').fill(id);
-    await viewer.page.locator('#remote-secret').fill(secret);
+    await viewer.page.locator('#remote-password').fill(password);
     await viewer.page.locator('#join').click();
     await expect(host.page.locator('#request')).toBeVisible();
     await expect(viewer.page.locator('video')).toHaveCount(0);

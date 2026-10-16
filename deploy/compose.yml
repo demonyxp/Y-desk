@@ -7,6 +7,8 @@ services:
     security_opt: ["no-new-privileges:true"]
     cap_drop: ["ALL"]
     read_only: true
+    volumes:
+      - signaling_data:/data
     mem_limit: 256m
     pids_limit: 64
   caddy:
@@ -54,5 +56,6 @@ services:
       - --denied-peer-ip=fc00::-fdff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
       - --denied-peer-ip=fe80::-febf:ffff:ffff:ffff:ffff:ffff:ffff:ffff
 volumes:
+  signaling_data:
   caddy_data:
   caddy_config:

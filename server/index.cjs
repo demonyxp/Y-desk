@@ -1,12 +1,15 @@
 'use strict';
 
 const http = require('node:http');
-const { randomBytes, randomInt, timingSafeEqual } = require('node:crypto');
+const { randomBytes, timingSafeEqual } = require('node:crypto');
 const { WebSocketServer, WebSocket } = require('ws');
+const { deviceRegistry, digest } = require('./registry.cjs');
 
-function createSignalingServer({ host = '127.0.0.1', port = 21120, pendingMs = 30000, maxClients = 1000 } = {}) {
+function createSignalingServer({ host = '127.0.0.1', port = 21120, pendingMs = 30000, maxClients = 1000, statePath, attemptWindowMs = 60000 } = {}) {
   const clients = new Set();
   const rooms = new Map();
+  const registry = deviceRegistry(statePath);
+  const failures = new Map();
   const server = http.createServer((req, res) => {
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Cache-Control', 'no-store');
@@ -39,7 +42,7 @@ function createSignalingServer({ host = '127.0.0.1', port = 21120, pendingMs = 3
     ws.on('error', () => {});
     ws.on('close', () => {
       unpair(ws);
-      if (ws.room) rooms.delete(ws.room);
+      if (rooms.get(ws.room) === ws) rooms.delete(ws.room);
       clients.delete(ws);
     });
     ws.on('message', (raw, binary) => {
@@ -47,28 +50,37 @@ function createSignalingServer({ host = '127.0.0.1', port = 21120, pendingMs = 3
       ws.tokens = Math.min(100, ws.tokens + (now - ws.tokenTime) / 100);
       ws.tokenTime = now;
       if (--ws.tokens < 0) return ws.close(1008, 'Rate limit');
+      let operation;
       try {
         if (binary) throw new Error('消息格式错误');
         const msg = JSON.parse(raw.toString());
+        operation = msg?.type;
         if (!msg || typeof msg.type !== 'string') throw new Error('消息格式错误');
         if (msg.type === 'register') {
           if (ws.room || ws.pair) throw new Error('当前已注册或正在连接');
-          let id;
-          do { id = String(randomInt(100000000, 1000000000)); } while (rooms.has(id));
+          if (msg.version !== 2 || typeof msg.authKey !== 'string' || !/^[a-f0-9]{64}$/.test(msg.authKey)) throw new Error('客户端协议不兼容，请安装最新版');
+          registry.claim(msg.id, msg.ownerToken);
+          const id = msg.id;
+          const previous = rooms.get(id);
+          if (previous) { unpair(previous, '设备已重新上线'); previous.close(1000, 'Replaced by owner'); }
           ws.room = id;
-          ws.secret = randomBytes(16).toString('hex');
+          ws.passwordHash = digest(msg.authKey);
           rooms.set(id, ws);
-          return send(ws, { type: 'registered', id, secret: ws.secret });
+          return send(ws, { type: 'registered', version: 2, id });
         }
         if (msg.type === 'join') {
           if (now - ws.joinTime < 2000) throw new Error('请稍后重试');
           ws.joinTime = now;
           if (ws.room || ws.pair) throw new Error('当前已共享或正在连接');
           const target = rooms.get(msg.id);
-          const secret = typeof msg.secret === 'string' && /^[a-f0-9]{32}$/.test(msg.secret) ? msg.secret : '';
-          if (!target || !secret || !timingSafeEqual(Buffer.from(secret), Buffer.from(target.secret))) {
-            throw new Error('设备码或访问密钥错误，或对方未开启共享');
+          const failure = failures.get(msg.id);
+          if (failure && now - failure.since < attemptWindowMs && failure.count >= 5) throw new Error('密码错误次数过多，请 60 秒后重试');
+          const authKey = typeof msg.authKey === 'string' && /^[a-f0-9]{64}$/.test(msg.authKey) ? msg.authKey : '';
+          if (!target || !authKey || !timingSafeEqual(Buffer.from(digest(authKey)), Buffer.from(target.passwordHash))) {
+            if (target) failures.set(msg.id, failure && now - failure.since < attemptWindowMs ? { ...failure, count: failure.count + 1 } : { since: now, count: 1 });
+            throw new Error('设备码或密码错误，或对方未开启共享');
           }
+          failures.delete(msg.id);
           if (target.pair) throw new Error('对方正在连接中');
           const pair = { id: randomBytes(16).toString('hex'), host: target, viewer: ws, accepted: false };
           ws.pair = target.pair = pair;
@@ -94,11 +106,12 @@ function createSignalingServer({ host = '127.0.0.1', port = 21120, pendingMs = 3
         }
         throw new Error('操作无效');
       } catch (error) {
-        send(ws, { type: 'error', message: error instanceof SyntaxError ? '消息格式错误' : error.message });
+        send(ws, { type: 'error', fatal: operation === 'register', message: error instanceof SyntaxError ? '消息格式错误' : error.message });
       }
     });
   });
   const heartbeat = setInterval(() => {
+    for (const [id, failure] of failures) if (Date.now() - failure.since >= attemptWindowMs) failures.delete(id);
     for (const ws of clients) {
       if (!ws.alive) { ws.terminate(); continue; }
       ws.alive = false;
@@ -120,7 +133,7 @@ function createSignalingServer({ host = '127.0.0.1', port = 21120, pendingMs = 3
 }
 
 if (require.main === module) {
-  const signaling = createSignalingServer({ host: process.env.HOST || '127.0.0.1', port: Number(process.env.PORT || 21120) });
+  const signaling = createSignalingServer({ host: process.env.HOST || '127.0.0.1', port: Number(process.env.PORT || 21120), statePath: process.env.STATE_PATH || 'data/devices.json' });
   signaling.listen().then(address => console.log(`Y-Desk signaling listening on ${address.address}:${address.port}`))
     .catch(error => { console.error(error.message); process.exitCode = 1; signaling.close(); });
   for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => signaling.close().then(() => process.exit(0)));

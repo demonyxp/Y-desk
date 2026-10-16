@@ -10,3 +10,4 @@ playwright-report/
 *.pfx
 *.pem
 .local/
+data/

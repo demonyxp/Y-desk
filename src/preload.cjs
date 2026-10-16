@@ -3,6 +3,8 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('ydesk', {
   screens: () => ipcRenderer.invoke('screens'),
   qualities: () => ipcRenderer.invoke('qualities'),
+  settings: () => ipcRenderer.invoke('settings'),
+  resume: () => ipcRenderer.invoke('resume'),
   connect: options => ipcRenderer.invoke('connect', options),
   approve: options => ipcRenderer.invoke('approve', options),
   signal: data => ipcRenderer.invoke('signal', data),

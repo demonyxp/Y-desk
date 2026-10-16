@@ -1,6 +1,6 @@
 {
   "name": "y-desk",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Windows 双显示器远程桌面，基于 WebRTC 的实时共享与控制",
   "private": true,
   "main": "src/main.cjs",
@@ -13,7 +13,7 @@
     "test": "node --test tests/*.test.cjs",
     "test:e2e": "playwright test",
     "check": "node scripts/check.cjs",
-    "dist": "npm run build:native && electron-builder --win portable --x64",
+    "dist": "npm run build:native && electron-builder --win nsis portable --x64",
     "pack": "npm run build:native && electron-builder --win --dir --x64"
   },
   "dependencies": { "ws": "8.22.0" },
@@ -28,7 +28,14 @@
     "directories": { "output": "dist" },
     "files": ["src/**/*", "assets/icon.ico", "package.json"],
     "extraResources": [{ "from": "native/bin/YDesk.Input.exe", "to": "native/YDesk.Input.exe" }],
-    "win": { "target": "portable", "icon": "assets/icon.ico", "signExecutable": false },
+    "win": { "target": ["nsis", "portable"], "icon": "assets/icon.ico", "signExecutable": false },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "artifactName": "Y-Desk-Setup-${version}-win-${arch}.${ext}"
+    },
     "artifactName": "Y-Desk-${version}-win-${arch}.${ext}"
   }
 }

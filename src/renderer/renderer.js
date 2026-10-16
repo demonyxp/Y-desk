@@ -6,12 +6,14 @@ let pc, channel, role, sessionId, pendingId, captureStreams = [], localScreens =
 let epoch = 0, busy = false, sharing = false, allowControl = true, fullScreen = false;
 let qualities, candidates = [], statsTimer, heartbeatTimer, connectionTimer, disconnectedTimer;
 let quality = 'balanced', lastStats = new Map(), eventQueue = Promise.resolve(), controlCount = 0, controlWindow = 0;
+let unattended = false, canAutoStart = false, preferredDisplays = [];
 
 function notice(message, error = false) { $('notice').textContent = message; $('notice').classList.toggle('error', error); }
 function status(message, online = false) { $('status').textContent = message; $('status-dot').classList.toggle('online', online); }
 function setBusy(value) {
   busy = value;
-  for (const id of ['share', 'join', 'refresh', 'server', 'ice', 'remote-id', 'remote-secret']) $(id).disabled = value;
+  for (const id of ['share', 'join', 'refresh', 'server', 'ice', 'remote-id', 'remote-password', 'host-password', 'unattended']) $(id).disabled = value;
+  $('auto-start').disabled = value || !canAutoStart || !$('unattended').checked;
   document.querySelectorAll('.screen-card input').forEach(input => { input.disabled = value; });
   $('stop').hidden = !value;
 }
@@ -24,7 +26,8 @@ async function refreshScreens() {
   for (const [index, screen] of localScreens.entries()) {
     const label = document.createElement('label'); label.className = 'screen-card';
     const image = document.createElement('img'); image.src = screen.thumbnail; image.alt = `屏幕 ${index + 1} 预览`;
-    const input = document.createElement('input'); input.type = 'checkbox'; input.value = screen.id; input.checked = index < 2;
+    const input = document.createElement('input'); input.type = 'checkbox'; input.value = screen.id;
+    input.checked = preferredDisplays.length ? preferredDisplays.includes(screen.displayId) : index < 2;
     input.setAttribute('aria-label', `共享屏幕 ${index + 1}`);
     input.addEventListener('change', () => {
       if (document.querySelectorAll('.screen-card input:checked').length > 2) { input.checked = false; notice('最多同时共享两块屏幕。'); }
@@ -65,8 +68,7 @@ async function stopAll(message = '连接已结束') {
   document.body.classList.remove('sharing-mode');
   await api.disconnect();
   $('identity').hidden = true;
-  $('device-id').textContent = ''; $('device-secret').value = '';
-  $('device-secret').type = 'password'; $('show-secret').textContent = '显示密钥';
+  $('device-id').textContent = '';
   setBusy(false); status('未连接'); notice(message);
 }
 async function endSession(message) {
@@ -78,12 +80,14 @@ async function endSession(message) {
 async function start(roleName) {
   if (busy) return;
   role = roleName;
+  unattended = role === 'host' && $('unattended').checked;
   quality = $('quality').value;
   setBusy(true); status('连接服务器…'); notice('正在连接…');
   try {
     await api.connect({ url: $('server').value.trim(), ice: $('ice').value.trim(), role,
       screens: [...document.querySelectorAll('.screen-card input:checked')].map(input => input.value),
-      id: $('remote-id').value.replace(/\s/g, ''), secret: $('remote-secret').value.trim().toLowerCase() });
+      id: $('remote-id').value.replace(/\s/g, ''), password: $(role === 'host' ? 'host-password' : 'remote-password').value,
+      unattended, autoStart: unattended && $('auto-start').checked });
     localStorage.setItem('ydesk-server', $('server').value.trim());
     $('server-summary').textContent = $('server').value.trim();
     $('network-settings').open = false;
@@ -144,15 +148,15 @@ async function createPeer(message) {
       clearTimeout(connectionTimer); clearTimeout(disconnectedTimer);
       status(role === 'host' ? '共享中 · 对方可控制' : '已连接 · 加密传输', true);
       notice(role === 'host' ? '随时点击停止共享，或按 Ctrl + Alt + F12。' : '点击远程画面后，鼠标和键盘将发送到对方电脑。');
-    } else if (peer.connectionState === 'failed') void stopAll('视频连接失败。跨网络连接请配置可用的 TURN 中继。');
+    } else if (peer.connectionState === 'failed') void endSession('视频连接失败。跨网络连接请配置可用的 TURN 中继。');
     else if (peer.connectionState === 'disconnected') {
       status('网络中断，等待恢复…');
       if (role === 'host') api.input({ type: 'release' });
       clearTimeout(disconnectedTimer);
-      disconnectedTimer = setTimeout(() => { if (token === epoch) void stopAll('网络未恢复，请重新连接'); }, 12000);
+      disconnectedTimer = setTimeout(() => { if (token === epoch) void endSession('网络未恢复，请重新连接'); }, 12000);
     }
   };
-  connectionTimer = setTimeout(() => { if (token === epoch) void stopAll('建立视频连接超时。请检查防火墙和 TURN 配置。'); }, 30000);
+  connectionTimer = setTimeout(() => { if (token === epoch) void endSession('建立视频连接超时。请检查防火墙和 TURN 配置。'); }, 30000);
   if (role === 'host') {
     $('setup').hidden = true;
     $('host-active').hidden = false;
@@ -315,29 +319,36 @@ async function onEvent(message) {
   switch (message.type) {
     case 'registered':
       sharing = true; $('identity').hidden = false;
+      unattended = Boolean(message.unattended);
       document.body.classList.add('sharing-mode');
       $('device-id').textContent = message.id.replace(/(\d{3})(?=\d)/g, '$1 ');
-      $('device-secret').value = message.secret;
-      status('共享就绪 · 等待连接', true); notice('将设备码和访问密钥发给对方，收到请求后确认身份。'); break;
+      $('sharing-mode-label').textContent = unattended ? '无人值守已开启：密码正确即可连接' : '连接时需要本机允许';
+      status('共享就绪 · 等待连接', true); notice(unattended ? '无人值守已开启。关闭窗口后继续在系统托盘运行；点击停止共享可暂停自动共享。' : '将设备码和自设密码告知对方，收到请求后确认身份。'); break;
     case 'request':
-      pendingId = message.session; $('request').hidden = false;
-      $('accept').disabled = false; status('收到连接请求', true); break;
-    case 'waiting': pendingId = message.session; status('等待对方确认…'); notice('对方需要在 30 秒内允许连接。'); break;
+      pendingId = message.session; $('request').hidden = Boolean(message.unattended);
+      $('accept').disabled = false; status(message.unattended ? '密码验证通过，正在自动连接…' : '收到连接请求', true); break;
+    case 'waiting': pendingId = message.session; status('等待连接…'); notice('无人值守将自动连接；普通模式等待对方确认。'); break;
     case 'ready': if (message.session === pendingId) await createPeer(message); break;
     case 'signal': if (message.session === sessionId) await receiveSignal(message.data); break;
     case 'ended':
       if (message.session === sessionId || message.session === pendingId) await endSession(message.reason);
       break;
     case 'offline': await stopAll(message.message); break;
+    case 'reconnecting':
+      clearPeer(); role = 'host'; sharing = true; unattended = true; setBusy(true);
+      status('无人值守 · 等待恢复'); notice(message.message); break;
     case 'error':
-      if (!sharing && !sessionId) await stopAll(message.message);
+      if (message.fatal || !sharing && !sessionId) await stopAll(message.message);
       notice(message.message, true); break;
     case 'input-error': notice(message.message, true); break;
     case 'notice': notice(message.message); break;
   }
 }
 api.onEvent(message => {
-  eventQueue = eventQueue.then(() => onEvent(message)).catch(async error => { await stopAll(); showError(error); });
+  eventQueue = eventQueue.then(() => onEvent(message)).catch(async error => {
+    if (unattended && sharing) await endSession(error.message); else await stopAll();
+    showError(error);
+  });
 });
 $('share').addEventListener('click', () => void start('host'));
 $('join-form').addEventListener('submit', event => { event.preventDefault(); void start('viewer'); });
@@ -349,13 +360,13 @@ $('accept').addEventListener('click', () => void action(async () => {
   finally { $('accept').disabled = false; }
 }));
 $('reject').addEventListener('click', () => void action(() => api.approve({ session: pendingId, allow: false })));
-$('show-secret').addEventListener('click', () => {
-  const show = $('device-secret').type === 'password'; $('device-secret').type = show ? 'text' : 'password';
-  $('show-secret').textContent = show ? '隐藏密钥' : '显示密钥';
+$('unattended').addEventListener('change', () => {
+  $('auto-start').disabled = !canAutoStart || !$('unattended').checked;
+  if (!$('unattended').checked) $('auto-start').checked = false;
 });
 $('copy-invite').addEventListener('click', () => void action(async () => {
   await api.copyInvite();
-  notice('连接信息已复制，请通过可信渠道发送给对方。');
+  notice('设备码和服务器已复制。请单独告知对方连接密码。');
 }));
 $('layout').addEventListener('change', updateLayout);
 $('quality').addEventListener('change', () => { sendData({ type: 'quality', value: $('quality').value }); notice('画质上限已调整，实际帧率与分辨率随网络和画面变化。'); });
@@ -372,10 +383,19 @@ $('send-text').addEventListener('click', () => {
   if (sendData({ type: 'text', text: $('remote-text').value })) { $('remote-text').value = ''; notice('文本已发送到远端当前输入位置。'); }
 });
 window.addEventListener('blur', release);
-window.addEventListener('beforeunload', () => { clearPeer(); void api.disconnect(); });
+window.addEventListener('beforeunload', () => { clearPeer(); });
 document.addEventListener('visibilitychange', () => { if (document.hidden) release(); });
 void action(async () => {
   qualities = await api.qualities();
-  $('server').value = localStorage.getItem('ydesk-server') || 'ws://127.0.0.1:21120';
+  const settings = await api.settings();
+  canAutoStart = settings.canAutoStart; preferredDisplays = settings.displayIds;
+  $('server').value = settings.url || localStorage.getItem('ydesk-server') || 'ws://127.0.0.1:21120';
+  $('ice').value = settings.ice.length ? JSON.stringify(settings.ice, null, 2) : '';
+  $('unattended').checked = settings.unattended;
+  $('auto-start').checked = canAutoStart && settings.autoStart;
+  $('auto-start').disabled = !canAutoStart || !settings.unattended;
+  if (!canAutoStart) $('auto-start-hint').textContent = '登录自启请使用安装版；当前版本仍可在系统托盘保持无人值守。';
+  if (settings.passwordSaved) $('host-password').placeholder = '已保存密码；留空沿用，输入可修改';
   await refreshScreens();
+  if (settings.autoShare) { role = 'host'; unattended = true; sharing = true; setBusy(true); await api.resume(); }
 });

@@ -26,24 +26,30 @@
       </details>
       <div class="connection-grid">
         <section class="panel host-panel">
-          <div class="panel-title"><span class="section-icon" aria-hidden="true">↗</span><div><h2>共享这台电脑</h2><p>选择 1–2 块屏幕，收到请求后再确认。</p></div></div>
+          <div class="panel-title"><span class="section-icon" aria-hidden="true">↗</span><div><h2>共享这台电脑</h2><p>选择屏幕并设置密码，可开启无人值守。</p></div></div>
           <div class="screen-list" id="screens"><p class="muted">正在读取显示器…</p></div>
+          <div class="host-options">
+            <label>连接密码<input id="host-password" type="password" placeholder="自设密码，至少 8 个字符" minlength="8" maxlength="128" autocomplete="new-password"></label>
+            <label class="toggle-line"><input id="unattended" type="checkbox">无人值守：密码正确即可连接，无需本机确认</label>
+            <label class="toggle-line"><input id="auto-start" type="checkbox" disabled>Windows 登录后自动启动</label>
+            <p id="auto-start-hint" class="hint">安装版支持登录自启；关闭窗口后，无人值守保留在系统托盘。</p>
+          </div>
           <div class="host-actions"><button id="share" class="primary">开启共享</button><button id="refresh" class="text-button">刷新屏幕</button></div>
           <div id="identity" class="identity" hidden>
-            <span class="field-label">本次设备码</span><strong id="device-id"></strong>
-            <label>访问密钥 <input id="device-secret" readonly type="password" autocomplete="off"></label>
-            <div class="identity-actions"><button id="show-secret" class="text-button">显示密钥</button><button id="copy-invite" class="secondary">复制连接信息</button></div>
-            <p class="hint">仅发给信任的人。关闭共享后，设备码和密钥自动失效。</p>
+            <span class="field-label">固定设备码</span><strong id="device-id"></strong>
+            <p id="sharing-mode-label">连接时需要本机允许</p>
+            <div class="identity-actions"><button id="copy-invite" class="secondary">复制设备码和服务器</button></div>
+            <p class="hint">密码请单独告诉可信的人。设备码重启后不变。</p>
           </div>
         </section>
         <section class="panel viewer-panel">
-          <div class="panel-title"><span class="section-icon" aria-hidden="true">↙</span><div><h2>连接另一台电脑</h2><p>输入对方的连接信息，等待对方允许。</p></div></div>
+          <div class="panel-title"><span class="section-icon" aria-hidden="true">↙</span><div><h2>连接另一台电脑</h2><p>输入设备码和对方设置的密码。</p></div></div>
           <form id="join-form">
             <label>对方设备码<input id="remote-id" placeholder="9 位设备码" inputmode="numeric" maxlength="11" required autocomplete="off"></label>
-            <label>访问密钥<input id="remote-secret" placeholder="对方提供的 32 位密钥" type="password" maxlength="32" required autocomplete="off" spellcheck="false"></label>
+            <label>连接密码<input id="remote-password" placeholder="对方设置的密码，区分大小写" type="password" minlength="8" maxlength="128" required autocomplete="off"></label>
             <button id="join" class="primary" type="submit">连接桌面 <span aria-hidden="true">→</span></button>
           </form>
-          <div class="privacy-note"><span aria-hidden="true">◎</span><p>对方确认后才会共享画面与控制权。<br>连接中，双方随时可以结束。</p></div>
+          <div class="privacy-note"><span aria-hidden="true">◎</span><p>普通模式需要对方允许；无人值守自动连接。<br>连接中，双方随时可以结束。</p></div>
         </section>
       </div>
     </section>
@@ -70,6 +76,6 @@
     </section>
     <div class="bottom-actions"><p id="notice" role="status" aria-live="polite">画面经 WebRTC 加密传输。实际清晰度与流畅度取决于网络及硬件。</p><button id="stop" class="danger" hidden>停止共享 / 断开</button></div>
   </main>
-  <footer class="app-footer"><span>Y-DESK / WINDOWS</span><span>双屏 · 实时 · 由你掌控</span><span>v0.1.0</span></footer>
+  <footer class="app-footer"><span>Y-DESK / WINDOWS</span><span>双屏 · 实时 · 由你掌控</span><span>v0.2.0</span></footer>
 </body>
 </html>
