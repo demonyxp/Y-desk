@@ -7,6 +7,21 @@ let epoch = 0, busy = false, sharing = false, allowControl = true, fullScreen = 
 let qualities, candidates = [], statsTimer, heartbeatTimer, connectionTimer, disconnectedTimer;
 let quality = 'balanced', lastStats = new Map(), eventQueue = Promise.resolve(), controlCount = 0, controlWindow = 0;
 let unattended = false, canAutoStart = false, preferredDisplays = [];
+function renderUpdate(state) {
+  $('update-version').textContent = `软件更新 · 当前 v${state.currentVersion}`;
+  $('update-message').textContent = state.message;
+  $('check-update').disabled = ['checking', 'downloading', 'installing'].includes(state.status);
+  $('download-update').hidden = state.status !== 'available' || !state.installable;
+  $('install-update').hidden = state.status !== 'downloaded';
+  $('update-page').hidden = !['error', 'unsupported'].includes(state.status) && (state.installable || state.status !== 'available');
+  $('update-progress').hidden = state.status !== 'downloading';
+  $('update-progress').value = state.progress;
+  if (['available', 'downloading', 'downloaded', 'installing', 'error'].includes(state.status)) $('update-panel').hidden = false;
+}
+async function updateAction(fn) {
+  $('update-panel').hidden = false;
+  try { renderUpdate(await fn()); } catch { $('update-message').textContent = '更新操作失败，请重试。'; }
+}
 
 function notice(message, error = false) { $('notice').textContent = message; $('notice').classList.toggle('error', error); }
 function status(message, online = false) { $('status').textContent = message; $('status-dot').classList.toggle('online', online); }
@@ -317,6 +332,7 @@ function startStats(peer, token) {
 
 async function onEvent(message) {
   switch (message.type) {
+    case 'update-state': renderUpdate(message.state); break;
     case 'registered':
       sharing = true; $('copy-invite').disabled = false;
       unattended = Boolean(message.unattended);
@@ -353,6 +369,11 @@ api.onEvent(message => {
   });
 });
 $('share').addEventListener('click', () => void start('host'));
+$('check-update').addEventListener('click', () => void updateAction(() => api.updateCheck()));
+$('download-update').addEventListener('click', () => void updateAction(() => api.updateDownload()));
+$('install-update').addEventListener('click', () => void updateAction(() => api.updateInstall()));
+$('update-page').addEventListener('click', () => void action(() => api.updatePage()));
+$('dismiss-update').addEventListener('click', () => { $('update-panel').hidden = true; });
 $('join-form').addEventListener('submit', event => { event.preventDefault(); void start('viewer'); });
 $('refresh').addEventListener('click', () => void action(refreshScreens));
 $('stop').addEventListener('click', () => void action(() => stopAll()));
@@ -396,6 +417,7 @@ void action(async () => {
   const settings = await api.settings();
   $('device-id').textContent = settings.id.replace(/(\d{3})(?=\d)/g, '$1 ');
   $('copy-device-id').disabled = false;
+  renderUpdate(await api.updateState());
   canAutoStart = settings.canAutoStart; preferredDisplays = settings.displayIds;
   $('server').value = settings.url || localStorage.getItem('ydesk-server') || 'ws://127.0.0.1:21120';
   $('ice').value = settings.ice.length ? JSON.stringify(settings.ice, null, 2) : '';

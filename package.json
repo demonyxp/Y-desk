@@ -1,6 +1,6 @@
 {
   "name": "y-desk",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "Windows 双显示器远程桌面，基于 WebRTC 的实时共享与控制",
   "private": true,
   "main": "src/main.cjs",
@@ -16,7 +16,7 @@
     "dist": "npm run build:native && electron-builder --win nsis portable --x64 --publish never",
     "pack": "npm run build:native && electron-builder --win --dir --x64"
   },
-  "dependencies": { "ws": "8.22.0" },
+  "dependencies": { "electron-updater": "6.8.9", "ws": "8.22.0" },
   "devDependencies": {
     "@playwright/test": "1.64.1",
     "electron": "44.8.0",
@@ -25,6 +25,7 @@
   "build": {
     "appId": "io.github.demonyxp.ydesk",
     "productName": "Y-Desk",
+    "publish": { "provider": "github", "owner": "demonyxp", "repo": "Y-desk" },
     "directories": { "output": "dist" },
     "files": ["src/**/*", "assets/icon.ico", "package.json"],
     "extraResources": [{ "from": "native/bin/YDesk.Input.exe", "to": "native/YDesk.Input.exe" }],

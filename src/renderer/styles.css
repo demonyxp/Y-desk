@@ -26,6 +26,11 @@ p { line-height:1.7; }
 .status { display:flex; align-items:center; gap:9px; font-size:13px; }
 .status i { width:8px; height:8px; border-radius:50%; background:#a0adba; }
 .status i.online { background:var(--green); box-shadow:0 0 0 4px #e3f3ee; }
+.header-actions { display:flex; align-items:center; gap:24px; }
+.update-panel { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:16px 20px; margin-bottom:20px; background:#e3edf9; border:1px solid #bbd1ed; border-radius:10px; }
+.update-panel p { margin-top:5px; font-size:12px; }
+.update-panel progress { display:block; width:100%; margin-top:8px; accent-color:var(--blue); }
+.update-actions { display:flex; flex-wrap:wrap; gap:8px; flex:none; }
 main { max-width:1440px; margin:auto; padding:28px 38px 12px; }
 .intro { display:flex; align-items:center; justify-content:space-between; margin:4px 0 26px; }
 .intro p { color:var(--muted); }

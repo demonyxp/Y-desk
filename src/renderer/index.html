@@ -11,9 +11,13 @@
 <body>
   <header class="app-header">
     <div class="brand"><span class="brand-mark" aria-hidden="true">Y</span><span>Y-Desk<small>让两块屏幕，一起抵达。</small></span></div>
-    <div class="status" role="status"><i id="status-dot"></i><span id="status">未连接</span></div>
+    <div class="header-actions"><button id="check-update" class="text-button">检查更新</button><div class="status" role="status"><i id="status-dot"></i><span id="status">未连接</span></div></div>
   </header>
   <main>
+    <section id="update-panel" class="update-panel" hidden aria-label="软件更新">
+      <div><strong id="update-version">软件更新</strong><p id="update-message" role="status" aria-live="polite"></p><progress id="update-progress" max="100" value="0" hidden aria-label="更新下载进度"></progress></div>
+      <div class="update-actions"><button id="download-update" class="secondary" hidden>下载更新</button><button id="install-update" class="primary" hidden>重启并安装</button><button id="update-page" class="secondary" hidden>前往下载页</button><button id="dismiss-update" class="text-button" aria-label="收起更新提示">收起</button></div>
+    </section>
     <section id="setup">
       <div class="intro"><div><p class="eyebrow">你的桌面，触手可及</p><h1>跨越距离，保留细节。</h1><p>共享正在使用的桌面。单屏专注，双屏协作。</p></div><div class="screen-symbol" aria-hidden="true"><span></span><span></span></div></div>
       <details class="network" id="network-settings" open>
@@ -76,6 +80,6 @@
     </section>
     <div class="bottom-actions"><p id="notice" role="status" aria-live="polite">画面经 WebRTC 加密传输。实际清晰度与流畅度取决于网络及硬件。</p><button id="stop" class="danger" hidden>停止共享 / 断开</button></div>
   </main>
-  <footer class="app-footer"><span>Y-DESK / WINDOWS</span><span>双屏 · 实时 · 由你掌控</span><span>v0.2.2</span></footer>
+  <footer class="app-footer"><span>Y-DESK / WINDOWS</span><span>双屏 · 实时 · 由你掌控</span><span>v0.3.0</span></footer>
 </body>
 </html>

@@ -2,9 +2,17 @@
 
 Windows 双显示器远程桌面。共享电脑当前正在使用的桌面，双方同时可见。支持自设密码和无人值守；普通模式仍需被控端确认。
 
-**[下载安装版](https://github.com/demonyxp/Y-desk/releases/latest/download/Y-Desk-Setup-0.2.2-win-x64.exe)** · **[下载免安装版](https://github.com/demonyxp/Y-desk/releases/latest/download/Y-Desk-0.2.2-win-x64.exe)** · [全部发布版本](https://github.com/demonyxp/Y-desk/releases)
+**[下载安装版](https://github.com/demonyxp/Y-desk/releases/latest/download/Y-Desk-Setup-0.3.0-win-x64.exe)** · **[下载免安装版](https://github.com/demonyxp/Y-desk/releases/latest/download/Y-Desk-0.3.0-win-x64.exe)** · [全部发布版本](https://github.com/demonyxp/Y-desk/releases)
 
 基于 Electron / Chromium 屏幕采集、WebRTC 实时视频和 Windows SendInput。没有逐帧截图轮询，也不上传录屏。**这是首个可运行版本，不承诺任意硬件、任意网络下均无卡顿。**
+
+## 软件更新
+
+v0.2.2 及以前需手动安装 v0.3.0 一次。安装版启动 15 秒后检查新版，此后每 6 小时检查；也可点击右上角“检查更新”。发现新版后点击“下载更新”，下载完成后点击“重启并安装”。远程连接和待处理连接请求未结束时禁止安装；普通退出不会自动安装。设备码、密码及无人值守配置沿用原来的 Windows 用户配置。
+
+便携版可以检查版本，但需要从下载页手动替换。更新服务使用本仓库的 GitHub Releases，需要电脑能访问 GitHub，与自建信令服务器无关。维护者发布版本标签时，CI 同时上传安装包、`latest.yml`、`.blockmap` 和校验文件；不能只上传 EXE。
+
+更新回归测试：构建后运行 `node e2e/update-package.cjs`，使用隔离配置及本机临时服务器验证真实下载、损坏文件拒绝和连接中禁止安装；最后的系统安装调用使用替身，不修改本机安装状态。
 
 ## 已实现
 
@@ -13,6 +21,7 @@ Windows 双显示器远程桌面。共享电脑当前正在使用的桌面，双
 - 三档画质上限和自适应传输；显示实际分辨率、解码帧率、接收码率、往返延迟及直连/中继状态。
 - 固定 9 位设备码、自设连接密码（8–128 字符），区分大小写；错误尝试有频率限制。
 - 无人值守支持密码验证后自动连接、托盘常驻、断网重连、重启恢复。安装版支持 Windows 登录后自启。
+- 自动检查 GitHub 新版，安装版支持程序内下载及重启安装；连接中禁止安装。
 - 断开、失焦、网络异常时释放按键；本地 `Ctrl + Alt + F12` 紧急停止并退出。
 - 自托管信令服务、WSS 部署配置、TURN 中继配置、Windows 便携版打包和 GitHub Actions 构建。
 
@@ -76,7 +85,7 @@ Chromium 自动协商双方支持的编码器并在可用时采用硬件加速�
 npm.cmd run dist
 ```
 
-输出安装版 `dist/Y-Desk-Setup-0.2.2-win-x64.exe` 和免安装版 `dist/Y-Desk-0.2.2-win-x64.exe`。均包含运行时和输入组件，目标 Windows 不需要安装 Node.js。未配置商业代码签名，首次打开可能出现 Windows SmartScreen 提示。不要上传 `node_modules` 或构建缓存到 Git。
+输出安装版 `dist/Y-Desk-Setup-0.3.0-win-x64.exe` 和免安装版 `dist/Y-Desk-0.3.0-win-x64.exe`。均包含运行时和输入组件，目标 Windows 不需要安装 Node.js。未配置商业代码签名，首次打开可能出现 Windows SmartScreen 提示。不要上传 `node_modules` 或构建缓存到 Git。
 
 推送 `main` 自动构建；推送 `v*` 标签会在构建成功后自动创建 GitHub Release，上传安装版、免安装版和 `SHA256SUMS.txt`，其他电脑可直接下载，无需下载源码或登录 Actions。
 

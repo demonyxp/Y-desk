@@ -14,6 +14,11 @@ contextBridge.exposeInMainWorld('ydesk', {
   fullscreen: enabled => ipcRenderer.invoke('fullscreen', enabled),
   copyInvite: () => ipcRenderer.invoke('copy-invite'),
   copyDeviceId: () => ipcRenderer.invoke('copy-device-id'),
+  updateState: () => ipcRenderer.invoke('updates-state'),
+  updateCheck: () => ipcRenderer.invoke('updates-check'),
+  updateDownload: () => ipcRenderer.invoke('updates-download'),
+  updateInstall: () => ipcRenderer.invoke('updates-install'),
+  updatePage: () => ipcRenderer.invoke('updates-page'),
   input: message => ipcRenderer.send('input', message),
   onEvent: callback => {
     const listener = (_event, message) => callback(message);

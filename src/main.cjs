@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, ipcMain, desktopCapturer, screen, globalShortcut, Menu, powerSaveBlocker, powerMonitor, clipboard, safeStorage, Tray, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, desktopCapturer, screen, globalShortcut, Menu, powerSaveBlocker, powerMonitor, clipboard, safeStorage, Tray, dialog, shell } = require('electron');
 const { join } = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { spawn } = require('node:child_process');
@@ -9,6 +9,7 @@ const WebSocket = require('ws');
 const { serverUrl, iceServers, normalizeInput, QUALITY } = require('./shared.cjs');
 const { passwordKey, validatePassword } = require('./auth.cjs');
 const { settingsStore } = require('./settings.cjs');
+const { createUpdates } = require('./updates.cjs');
 
 const testMode = !app.isPackaged && process.env.YDESK_TEST_MODE === '1';
 if (testMode && process.env.YDESK_PROFILE) app.setPath('userData', process.env.YDESK_PROFILE);
@@ -16,6 +17,7 @@ let window, socket, helper, sessionId, pendingId, approvedId, blocker;
 let allowedDisplays = [], availableDisplays = [], hosting = false, controlAllowed = false;
 let connectionGeneration = 0;
 let invitation = null;
+let updates, updateTimer, updateInterval;
 let store, profile, tray, desired = null, reconnectTimer, reconnectAttempts = 0, locked = false, suspended = false, quitting = false;
 const canAutoStart = app.isPackaged && !process.env.PORTABLE_EXECUTABLE_FILE;
 if (!testMode && !app.requestSingleInstanceLock()) { app.quit(); }
@@ -142,6 +144,7 @@ handle('resume', () => {
   updateTray(); scheduleReconnect('正在恢复无人值守'); return true;
 });
 async function connectTo(options, retry = false) {
+  if (quitting) throw new Error('程序正在退出，请稍后重试');
   const url = serverUrl(options.url);
   const ice = iceServers(options.ice);
   if (!['host', 'viewer'].includes(options.role)) throw new Error('连接方式错误');
@@ -265,6 +268,11 @@ handle('copy-invite', () => {
   clipboard.writeText(invitation);
 });
 handle('qualities', () => QUALITY);
+handle('updates-state', () => updates.getState());
+handle('updates-check', () => updates.check());
+handle('updates-download', () => updates.download());
+handle('updates-install', () => updates.install());
+handle('updates-page', () => shell.openExternal('https://github.com/demonyxp/Y-desk/releases/latest'));
 ipcMain.on('input', (event, message) => {
   trusted(event);
   if (!sessionId || !hosting || !controlAllowed || !helper) return;
@@ -277,6 +285,14 @@ app.whenReady().then(() => {
   profile = store.load();
   // 第一次运行就固定设备身份；密码只在用户开启无人值守后保存。
   store.save(profile);
+  updates = createUpdates({
+    updater: app.isPackaged ? require('electron-updater').autoUpdater : null,
+    enabled: app.isPackaged && process.platform === 'win32', installable: canAutoStart,
+    version: app.getVersion(), emit: state => emit({ type: 'update-state', state }),
+    isBusy: () => Boolean(sessionId || pendingId || approvedId || socket && !hosting),
+    beforeInstall: () => { quitting = true; clearTimeout(reconnectTimer); disconnect(); },
+    installFailed: () => { quitting = false; scheduleReconnect('更新未完成，恢复共享'); }
+  });
   Menu.setApplicationMenu(null);
   window = new BrowserWindow({
     width: 1220, height: 850, minWidth: 920, minHeight: 680, title: 'Y-Desk', backgroundColor: '#eef3f8',
@@ -298,6 +314,11 @@ app.whenReady().then(() => {
     if (!quitting && desired?.unattended) { event.preventDefault(); window.hide(); }
   });
   window.loadFile(join(__dirname, 'renderer/index.html'));
+  if (app.isPackaged) {
+    updateTimer = setTimeout(() => void updates.check(), 15000);
+    updateInterval = setInterval(() => void updates.check(), 6 * 60 * 60 * 1000);
+    updateTimer.unref(); updateInterval.unref();
+  }
   // 本地紧急停止不依赖远端网络和渲染进程。
   const registered = globalShortcut.register('Control+Alt+F12', () => { stopSharing(); app.quit(); });
   if (!registered) window.webContents.once('did-finish-load', () => emit({ type: 'notice', message: '紧急快捷键 Ctrl+Alt+F12 被占用，请使用窗口中的停止共享按钮。' }));
@@ -319,5 +340,5 @@ app.whenReady().then(() => {
     }
   });
 }).catch(error => { dialog.showErrorBox('Y-Desk 启动失败', error.message); app.quit(); });
-app.on('before-quit', () => { quitting = true; clearTimeout(reconnectTimer); disconnect(); tray?.destroy(); globalShortcut.unregisterAll(); });
+app.on('before-quit', () => { quitting = true; clearTimeout(reconnectTimer); clearTimeout(updateTimer); clearInterval(updateInterval); disconnect(); tray?.destroy(); globalShortcut.unregisterAll(); });
 app.on('window-all-closed', () => app.quit());
