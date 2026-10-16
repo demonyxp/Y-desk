@@ -26,6 +26,7 @@ test('无人值守：密码、托盘、加密保存、重启、断网重连和�
     await host.page.locator('#host-password').fill(password);
     await host.page.locator('#unattended').check();
     await host.page.locator('#share').click();
+    await expect(host.page.locator('#status')).toHaveText('共享就绪 · 等待连接');
     await expect(host.page.locator('#device-id')).toHaveText(/\d{3} \d{3} \d{3}/);
     const deviceId = (await host.page.locator('#device-id').textContent()).replace(/\s/g, '');
     expect(readFileSync(join(root, 'host/settings.bin')).includes(Buffer.from(password))).toBe(false);
@@ -62,9 +63,14 @@ test('无人值守：密码、托盘、加密保存、重启、断网重连和�
     await host.app.evaluate(({ powerMonitor }) => powerMonitor.emit('unlock-screen'));
     await expect(host.page.locator('#status')).toHaveText(/等待连接/, { timeout: 10000 });
     await host.page.locator('#stop').click();
+    await expect(host.page.locator('#status')).toHaveText('未连接');
+    await expect(host.page.locator('#device-id')).toBeVisible();
+    expect((await host.page.locator('#device-id').textContent()).replace(/\s/g, '')).toBe(deviceId);
+    await expect(host.page.locator('#copy-invite')).toBeDisabled();
     await host.app.close();
     host = await launch('host');
     await expect(host.page.locator('#status')).toHaveText('未连接');
+    expect((await host.page.locator('#device-id').textContent()).replace(/\s/g, '')).toBe(deviceId);
     expect(await host.page.evaluate(async () => (await window.ydesk.settings()).autoShare)).toBe(false);
   } finally {
     for (const app of apps.reverse()) await app.close().catch(() => {});

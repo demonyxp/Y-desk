@@ -61,14 +61,14 @@ input::placeholder,textarea::placeholder { color:#8293a3; font-weight:400; }
 #join { display:flex; justify-content:space-between; align-items:center; margin-top:1px; }
 .privacy-note { display:flex; gap:10px; color:var(--muted); font-size:12px; margin-top:23px; }
 .privacy-note>span { color:var(--green); font-size:24px; }
-.identity { margin-top:20px; padding-top:20px; border-top:1px solid var(--line); }
+.identity { margin-bottom:20px; padding-bottom:20px; border-bottom:1px solid var(--line); }
 .field-label { font-size:11px; color:var(--muted); }
 #device-id { display:block; font:30px 'Bahnschrift',Consolas,monospace; letter-spacing:4px; margin:7px 0 14px; }
 .host-options { margin-bottom:16px; }
 .toggle-line { display:flex; align-items:center; gap:8px; margin-top:12px; font-weight:400; line-height:1.5; }
 .toggle-line input { width:16px; height:16px; margin:0; flex:none; accent-color:var(--blue); }
 .host-options .hint { margin-top:9px; }
-.identity-actions { display:flex; justify-content:space-between; margin:8px 0; }
+.identity-actions { display:flex; flex-wrap:wrap; gap:8px; margin:8px 0; }
 .request-banner { display:flex; gap:14px; align-items:center; padding:20px; background:#fff5df; border:1px solid #ebd5a4; border-radius:10px; margin-top:20px; }
 .request-banner>div { flex:1; }
 .request-banner p { font-size:12px; margin-top:6px; }
@@ -108,6 +108,6 @@ body.sharing-mode .panel-title { grid-column:1 / -1; margin-bottom:8px; }
 body.sharing-mode .screen-list { grid-column:1; grid-row:2; margin:0; align-content:start; }
 body.sharing-mode .host-options { grid-column:1; grid-row:3; margin:0; }
 body.sharing-mode .host-actions { grid-column:1; grid-row:4; }
-body.sharing-mode .identity { grid-column:2; grid-row:2 / 5; margin:0; padding:0 0 0 24px; border-top:0; border-left:1px solid var(--line); }
+body.sharing-mode .identity { grid-column:2; grid-row:2 / 5; margin:0; padding:0 0 0 24px; border-bottom:0; border-left:1px solid var(--line); }
 @media(max-width:1000px) { main { padding:22px; } .app-header { padding:0 24px; } .panel { padding:19px; } .session-toolbar { flex-wrap:wrap; } .screen-symbol { padding-right:0; } }
 @media(prefers-reduced-motion:reduce) { * { transition:none!important; } }

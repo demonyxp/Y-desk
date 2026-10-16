@@ -259,6 +259,7 @@ handle('leave', () => {
 });
 handle('disconnect', stopSharing);
 handle('fullscreen', enabled => window.setFullScreen(Boolean(enabled)));
+handle('copy-device-id', () => clipboard.writeText(profile.identity.id));
 handle('copy-invite', () => {
   if (!hosting || !invitation) throw new Error('请先开启共享');
   clipboard.writeText(invitation);

@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('ydesk', {
   disconnect: () => ipcRenderer.invoke('disconnect'),
   fullscreen: enabled => ipcRenderer.invoke('fullscreen', enabled),
   copyInvite: () => ipcRenderer.invoke('copy-invite'),
+  copyDeviceId: () => ipcRenderer.invoke('copy-device-id'),
   input: message => ipcRenderer.send('input', message),
   onEvent: callback => {
     const listener = (_event, message) => callback(message);

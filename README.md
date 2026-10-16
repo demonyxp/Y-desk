@@ -2,7 +2,7 @@
 
 Windows 双显示器远程桌面。共享电脑当前正在使用的桌面，双方同时可见。支持自设密码和无人值守；普通模式仍需被控端确认。
 
-**[下载安装版](https://github.com/demonyxp/Y-desk/releases/latest/download/Y-Desk-Setup-0.2.1-win-x64.exe)** · **[下载免安装版](https://github.com/demonyxp/Y-desk/releases/latest/download/Y-Desk-0.2.1-win-x64.exe)** · [全部发布版本](https://github.com/demonyxp/Y-desk/releases)
+**[下载安装版](https://github.com/demonyxp/Y-desk/releases/latest/download/Y-Desk-Setup-0.2.2-win-x64.exe)** · **[下载免安装版](https://github.com/demonyxp/Y-desk/releases/latest/download/Y-Desk-0.2.2-win-x64.exe)** · [全部发布版本](https://github.com/demonyxp/Y-desk/releases)
 
 基于 Electron / Chromium 屏幕采集、WebRTC 实时视频和 Windows SendInput。没有逐帧截图轮询，也不上传录屏。**这是首个可运行版本，不承诺任意硬件、任意网络下均无卡顿。**
 
@@ -76,7 +76,7 @@ Chromium 自动协商双方支持的编码器并在可用时采用硬件加速�
 npm.cmd run dist
 ```
 
-输出安装版 `dist/Y-Desk-Setup-0.2.1-win-x64.exe` 和免安装版 `dist/Y-Desk-0.2.1-win-x64.exe`。均包含运行时和输入组件，目标 Windows 不需要安装 Node.js。未配置商业代码签名，首次打开可能出现 Windows SmartScreen 提示。不要上传 `node_modules` 或构建缓存到 Git。
+输出安装版 `dist/Y-Desk-Setup-0.2.2-win-x64.exe` 和免安装版 `dist/Y-Desk-0.2.2-win-x64.exe`。均包含运行时和输入组件，目标 Windows 不需要安装 Node.js。未配置商业代码签名，首次打开可能出现 Windows SmartScreen 提示。不要上传 `node_modules` 或构建缓存到 Git。
 
 推送 `main` 自动构建；推送 `v*` 标签会在构建成功后自动创建 GitHub Release，上传安装版、免安装版和 `SHA256SUMS.txt`，其他电脑可直接下载，无需下载源码或登录 Actions。
 

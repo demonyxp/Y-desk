@@ -67,8 +67,8 @@ async function stopAll(message = '连接已结束') {
   sharing = false; role = null;
   document.body.classList.remove('sharing-mode');
   await api.disconnect();
-  $('identity').hidden = true;
-  $('device-id').textContent = '';
+  $('sharing-mode-label').textContent = '尚未开启共享，请配置服务器后开启共享。';
+  $('copy-invite').disabled = true;
   setBusy(false); status('未连接'); notice(message);
 }
 async function endSession(message) {
@@ -318,7 +318,7 @@ function startStats(peer, token) {
 async function onEvent(message) {
   switch (message.type) {
     case 'registered':
-      sharing = true; $('identity').hidden = false;
+      sharing = true; $('copy-invite').disabled = false;
       unattended = Boolean(message.unattended);
       document.body.classList.add('sharing-mode');
       $('device-id').textContent = message.id.replace(/(\d{3})(?=\d)/g, '$1 ');
@@ -336,6 +336,8 @@ async function onEvent(message) {
     case 'offline': await stopAll(message.message); break;
     case 'reconnecting':
       clearPeer(); role = 'host'; sharing = true; unattended = true; setBusy(true);
+      $('copy-invite').disabled = true;
+      $('sharing-mode-label').textContent = '共享已暂停，正在等待恢复连接。';
       status('无人值守 · 等待恢复'); notice(message.message); break;
     case 'error':
       if (message.fatal || !sharing && !sessionId) await stopAll(message.message);
@@ -364,6 +366,10 @@ $('unattended').addEventListener('change', () => {
   $('auto-start').disabled = !canAutoStart || !$('unattended').checked;
   if (!$('unattended').checked) $('auto-start').checked = false;
 });
+$('copy-device-id').addEventListener('click', () => void action(async () => {
+  await api.copyDeviceId();
+  notice('本机设备码已复制。开启共享后，对方才能连接。');
+}));
 $('copy-invite').addEventListener('click', () => void action(async () => {
   await api.copyInvite();
   notice('设备码和服务器已复制。请单独告知对方连接密码。');
@@ -388,6 +394,8 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) relea
 void action(async () => {
   qualities = await api.qualities();
   const settings = await api.settings();
+  $('device-id').textContent = settings.id.replace(/(\d{3})(?=\d)/g, '$1 ');
+  $('copy-device-id').disabled = false;
   canAutoStart = settings.canAutoStart; preferredDisplays = settings.displayIds;
   $('server').value = settings.url || localStorage.getItem('ydesk-server') || 'ws://127.0.0.1:21120';
   $('ice').value = settings.ice.length ? JSON.stringify(settings.ice, null, 2) : '';

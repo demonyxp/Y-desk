@@ -27,6 +27,12 @@
       <div class="connection-grid">
         <section class="panel host-panel">
           <div class="panel-title"><span class="section-icon" aria-hidden="true">↗</span><div><h2>共享这台电脑</h2><p>选择屏幕并设置密码，可开启无人值守。</p></div></div>
+          <div id="identity" class="identity">
+            <span class="field-label">本机固定设备码</span><strong id="device-id">正在读取…</strong>
+            <p id="sharing-mode-label">尚未开启共享，请配置服务器后开启共享。</p>
+            <div class="identity-actions"><button id="copy-device-id" class="secondary" disabled>复制设备码</button><button id="copy-invite" class="secondary" disabled>复制设备码和服务器</button></div>
+            <p class="hint">设备码重启后不变。开启共享后，对方才能使用设备码和密码连接。</p>
+          </div>
           <div class="screen-list" id="screens"><p class="muted">正在读取显示器…</p></div>
           <div class="host-options">
             <label>连接密码<input id="host-password" type="password" placeholder="自设密码，至少 8 个字符" minlength="8" maxlength="128" autocomplete="new-password"></label>
@@ -35,12 +41,6 @@
             <p id="auto-start-hint" class="hint">安装版支持登录自启；关闭窗口后，无人值守保留在系统托盘。</p>
           </div>
           <div class="host-actions"><button id="share" class="primary">开启共享</button><button id="refresh" class="text-button">刷新屏幕</button></div>
-          <div id="identity" class="identity" hidden>
-            <span class="field-label">固定设备码</span><strong id="device-id"></strong>
-            <p id="sharing-mode-label">连接时需要本机允许</p>
-            <div class="identity-actions"><button id="copy-invite" class="secondary">复制设备码和服务器</button></div>
-            <p class="hint">密码请单独告诉可信的人。设备码重启后不变。</p>
-          </div>
         </section>
         <section class="panel viewer-panel">
           <div class="panel-title"><span class="section-icon" aria-hidden="true">↙</span><div><h2>连接另一台电脑</h2><p>输入设备码和对方设置的密码。</p></div></div>
@@ -76,6 +76,6 @@
     </section>
     <div class="bottom-actions"><p id="notice" role="status" aria-live="polite">画面经 WebRTC 加密传输。实际清晰度与流畅度取决于网络及硬件。</p><button id="stop" class="danger" hidden>停止共享 / 断开</button></div>
   </main>
-  <footer class="app-footer"><span>Y-DESK / WINDOWS</span><span>双屏 · 实时 · 由你掌控</span><span>v0.2.1</span></footer>
+  <footer class="app-footer"><span>Y-DESK / WINDOWS</span><span>双屏 · 实时 · 由你掌控</span><span>v0.2.2</span></footer>
 </body>
 </html>

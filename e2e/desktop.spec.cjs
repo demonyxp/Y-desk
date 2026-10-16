@@ -47,6 +47,7 @@ for (const syntheticDual of [false, true]) test(syntheticDual ? '双屏模拟：
     const password = 'Desk-Test#2026';
     await host.page.locator('#host-password').fill(password);
     await host.page.locator('#share').click();
+    await expect(host.page.locator('#status')).toHaveText('共享就绪 · 等待连接');
     await expect(host.page.locator('#device-id')).toHaveText(/\d{3} \d{3} \d{3}/);
     const id = (await host.page.locator('#device-id').textContent()).replace(/\s/g, '');
     await host.app.evaluate(({ clipboard }) => { clipboard.writeText = value => { globalThis.testCopiedInvite = value; }; });
