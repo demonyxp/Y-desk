@@ -1,6 +1,6 @@
 {
   "name": "y-desk",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Windows 双显示器远程桌面，基于 WebRTC 的实时共享与控制",
   "private": true,
   "main": "src/main.cjs",
@@ -13,7 +13,7 @@
     "test": "node --test tests/*.test.cjs",
     "test:e2e": "playwright test",
     "check": "node scripts/check.cjs",
-    "dist": "npm run build:native && electron-builder --win nsis portable --x64",
+    "dist": "npm run build:native && electron-builder --win nsis portable --x64 --publish never",
     "pack": "npm run build:native && electron-builder --win --dir --x64"
   },
   "dependencies": { "ws": "8.22.0" },
