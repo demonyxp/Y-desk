@@ -127,6 +127,10 @@ install -m 0600 -o ydesk -g ydesk /旧服务目录/data/devices.json /var/lib/y-
 
 ## 开发验证
 
+Windows 本机安装 Go 后，双击仓库根目录的 `build-server.bat` 即可编译并生成 `dist/server/ydesk-server-linux-amd64.zip`，适用于 Intel / AMD 的 x64 服务器。首次运行可能需要联网下载 Go 工具链和依赖；部署服务器不需要安装 Go。
+
+需要 ARM64 包时执行 `build-server.bat -Architecture arm64`。默认程序版本为 `dev`，可通过 `-Version server-v0.1.0` 指定版本。脚本只在本地编译打包，不自动上传或部署。
+
 源码位于 `server-go/`，使用 Go 1.27.2 构建。`go test -race ./...` 检查并发和资源边界；`go vet ./...` 静态检查。设置 `YDESK_GO_SERVER` 为编译出的程序绝对路径后，运行原有的 `tests/signaling.test.cjs`、`tests/go-migration.test.cjs` 和桌面 E2E 测试，即可用同一套客户端验证 Go 后端。
 
 参考：[Go WebSocket 库](https://pkg.go.dev/github.com/gorilla/websocket)、[宝塔反向代理](https://docs.bt.cn/user-guide/site/php/site-config/reverse-proxy)、[coturn 配置](https://github.com/coturn/coturn/wiki/turnserver)。
