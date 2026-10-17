@@ -1,0 +1,88 @@
+name: Go signaling server
+on:
+  push:
+    branches: [main]
+    paths: ['server-go/**', 'tests/**', 'deploy/**', 'docs/go-server.md', 'docs/server-release-notes.md', '.github/workflows/server.yml']
+    tags: ['server-v*']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.2'
+          cache-dependency-path: server-go/go.sum
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Go tests and race detection
+        working-directory: server-go
+        run: |
+          go test -race ./...
+          go vet ./...
+      - name: Protocol compatibility
+        run: |
+          npm ci --ignore-scripts
+          mkdir -p .local
+          (cd server-go && go build -o ../.local/ydesk-server .)
+          YDESK_GO_SERVER="$PWD/.local/ydesk-server" node --test tests/signaling.test.cjs tests/go-migration.test.cjs
+      - name: Validate native systemd installation
+        run: |
+          mkdir -p .local/service-test
+          cp .local/ydesk-server deploy/ydesk-signaling.service .local/service-test/
+          cp deploy/install-go.sh .local/service-test/install.sh
+          bash -n .local/service-test/install.sh
+          sudo bash .local/service-test/install.sh
+          systemd-analyze verify deploy/ydesk-signaling.service
+          sudo -u ydesk test -w /var/lib/y-desk
+          curl --fail http://127.0.0.1:21120/health
+          systemctl show ydesk-signaling.service -p MemoryCurrent
+      - name: Stop test service
+        if: always()
+        run: sudo systemctl stop ydesk-signaling.service || true
+      - name: Build Linux packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n deploy/install-go.sh
+          mkdir -p release
+          for arch in amd64 arm64; do
+            folder="ydesk-server-linux-$arch"
+            mkdir -p "release/$folder"
+            (cd server-go && CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build -trimpath -ldflags "-s -w -X main.version=$GITHUB_REF_NAME" -o "../release/$folder/ydesk-server" .)
+            cp deploy/ydesk-signaling.service deploy/nginx-ydesk.conf deploy/turnserver.conf.example "release/$folder/"
+            cp deploy/install-go.sh "release/$folder/install.sh"
+            cp docs/go-server.md "release/$folder/README.md"
+            chmod 755 "release/$folder/ydesk-server" "release/$folder/install.sh"
+            tar -czf "release/$folder.tar.gz" -C release "$folder"
+          done
+          (cd release && sha256sum *.tar.gz > SHA256SUMS.txt)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Y-Desk-Go-server
+          path: |
+            release/*.tar.gz
+            release/SHA256SUMS.txt
+          if-no-files-found: error
+  release:
+    if: startsWith(github.ref, 'refs/tags/server-v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: Y-Desk-Go-server
+          path: release
+      - name: Publish server release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" release/*.tar.gz release/SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --verify-tag --latest=false --title "Y-Desk Go server $GITHUB_REF_NAME" --notes-file docs/server-release-notes.md

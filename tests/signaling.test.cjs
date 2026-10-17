@@ -1,7 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { WebSocket } = require('ws');
-const { createSignalingServer } = require('../server/index.cjs');
+const { createSignalingServer } = require('./helpers/signaling-server.cjs');
 const { newIdentity } = require('../src/auth.cjs');
 const { randomBytes } = require('node:crypto');
 

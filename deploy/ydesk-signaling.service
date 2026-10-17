@@ -1,0 +1,28 @@
+[Unit]
+Description=Y-Desk Go signaling server
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=ydesk
+Group=ydesk
+StateDirectory=y-desk
+StateDirectoryMode=0700
+WorkingDirectory=/var/lib/y-desk
+ExecStart=/opt/y-desk-server/ydesk-server -listen 127.0.0.1:21120 -state /var/lib/y-desk/devices.json -max-clients 128
+Environment=GOMEMLIMIT=96MiB
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=10
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+MemoryMax=128M
+LimitNOFILE=4096
+
+[Install]
+WantedBy=multi-user.target

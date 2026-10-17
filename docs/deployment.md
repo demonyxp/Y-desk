@@ -1,5 +1,7 @@
 # 公网部署
 
+**无需 Docker / Node.js：使用 [Go 独立服务端](go-server.md)**，下载 Linux 程序即可运行，兼容现有 Windows 客户端。
+
 **服务器已安装宝塔 / Nginx：请使用 [Ubuntu + 宝塔部署](baota.md)**，避免独立 Caddy 占用现有网站的 80/443 端口。
 
 需要一台 Linux 服务器、Docker Compose、可解析到服务器公网 IPv4 的域名。默认示例使用 Caddy 自动申请证书、Node 信令和 coturn。此仓库不含已经上线的公共服务。

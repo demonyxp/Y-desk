@@ -2,7 +2,7 @@ const { test, expect, _electron: electron } = require('@playwright/test');
 const { mkdtempSync, readFileSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
-const { createSignalingServer } = require('../server/index.cjs');
+const { createSignalingServer } = require('../tests/helpers/signaling-server.cjs');
 
 test('无人值守：密码、托盘、加密保存、重启、断网重连和主动停止', async () => {
   test.setTimeout(120000);

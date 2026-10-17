@@ -2,7 +2,7 @@ const { test, expect, _electron: electron } = require('@playwright/test');
 const { mkdtempSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
-const { createSignalingServer } = require('../server/index.cjs');
+const { createSignalingServer } = require('../tests/helpers/signaling-server.cjs');
 
 for (const syntheticDual of [false, true]) test(syntheticDual ? '双屏模拟：两路视频、屏幕切换、画质和断开清理' : 'Windows 实际屏幕采集、WebRTC 传输、控制事件、断开清理', async ({}, testInfo) => {
   const server = createSignalingServer({ port: 0 });

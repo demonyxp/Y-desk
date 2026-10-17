@@ -2,6 +2,8 @@
 
 Windows 双显示器远程桌面。共享电脑当前正在使用的桌面，双方同时可见。支持自设密码和无人值守；普通模式仍需被控端确认。
 
+**服务器部署：[Go 独立服务端（无需 Docker / Node.js）](docs/go-server.md)** · [Docker / Node.js 部署](docs/deployment.md)
+
 **[下载安装版](https://github.com/demonyxp/Y-desk/releases/latest/download/Y-Desk-Setup-0.3.0-win-x64.exe)** · **[下载免安装版](https://github.com/demonyxp/Y-desk/releases/latest/download/Y-Desk-0.3.0-win-x64.exe)** · [全部发布版本](https://github.com/demonyxp/Y-desk/releases)
 
 基于 Electron / Chromium 屏幕采集、WebRTC 实时视频和 Windows SendInput。没有逐帧截图轮询，也不上传录屏。**这是首个可运行版本，不承诺任意硬件、任意网络下均无卡顿。**
