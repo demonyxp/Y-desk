@@ -60,14 +60,14 @@ jobs:
             cp docs/go-server.md "release/$folder/README.md"
             chmod 755 "release/$folder/ydesk-server" "release/$folder/install.sh"
             tar -czf "release/$folder.tar.gz" -C release "$folder"
+            (cd release && zip -qr "$folder.zip" "$folder")
           done
-          (cd release && sha256sum *.tar.gz > SHA256SUMS.txt)
       - uses: actions/upload-artifact@v4
         with:
           name: Y-Desk-Go-server
           path: |
             release/*.tar.gz
-            release/SHA256SUMS.txt
+            release/*.zip
           if-no-files-found: error
   release:
     if: startsWith(github.ref, 'refs/tags/server-v')
@@ -85,4 +85,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" release/*.tar.gz release/SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --verify-tag --latest=false --title "Y-Desk Go server $GITHUB_REF_NAME" --notes-file docs/server-release-notes.md
+          gh release create "$GITHUB_REF_NAME" release/*.tar.gz release/*.zip --repo "$GITHUB_REPOSITORY" --verify-tag --latest=false --title "Y-Desk Go server $GITHUB_REF_NAME" --notes-file docs/server-release-notes.md

@@ -8,11 +8,11 @@ Go 版只替换信令服务，兼容现有 v0.2.x / v0.3.x Windows 客户端。�
 
 ```bash
 apt-get update
-apt-get install -y curl ca-certificates iproute2
+apt-get install -y curl ca-certificates iproute2 unzip
 uname -m
 ```
 
-`x86_64` 使用 amd64 包；`aarch64` / `arm64` 使用 arm64 包。以下命令自动选择并校验下载包：
+`x86_64` 使用 amd64 包；`aarch64` / `arm64` 使用 arm64 包。以下命令自动选择并下载安装包：
 
 ```bash
 (
@@ -26,10 +26,9 @@ mkdir -p /opt/ydesk-install
 cd /opt/ydesk-install
 ydesk_release=https://github.com/demonyxp/Y-desk/releases/download/server-v0.1.0
 ydesk_package="ydesk-server-linux-${ydesk_arch}"
-curl -fLO "$ydesk_release/$ydesk_package.tar.gz"
-curl -fLO "$ydesk_release/SHA256SUMS.txt"
-grep " $ydesk_package.tar.gz$" SHA256SUMS.txt | sha256sum -c -
-tar -xzf "$ydesk_package.tar.gz"
+curl -fLO "$ydesk_release/$ydesk_package.zip"
+unzip -o "$ydesk_package.zip"
+chmod +x "$ydesk_package/ydesk-server"
 bash "$ydesk_package/install.sh"
 )
 ```
@@ -113,7 +112,7 @@ journalctl -u ydesk-signaling -n 80 --no-pager
 /opt/y-desk-server/ydesk-server -version
 ```
 
-升级时下载新的服务端包，校验后再次执行包中的 `install.sh`。脚本替换程序并重启服务，现有连接会断开，无人值守主机随后自动上线。数据目录不删除，必须定期备份。
+升级时下载新的服务端包，解压后再次执行包中的 `install.sh`。脚本替换程序并重启服务，现有连接会断开，无人值守主机随后自动上线。数据目录不删除，必须定期备份。
 
 从 Node 服务端迁移时，注册表 JSON 格式相同。先停止旧服务，在首次启动 Go 服务前复制原 `data/devices.json`（Docker 为 `signaling_data` 卷内文件）。保留已有的 Go 注册表，不要把两个运行中的服务指向同一份数据文件：
 
