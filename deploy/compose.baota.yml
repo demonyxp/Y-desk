@@ -1,0 +1,7 @@
+# 与 compose.yml 一起使用；宝塔 Nginx 负责公网 HTTPS。
+services:
+  signaling:
+    ports:
+      - "127.0.0.1:21120:21120"
+  caddy:
+    profiles: [standalone-https]

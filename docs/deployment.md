@@ -1,5 +1,7 @@
 # 公网部署
 
+**服务器已安装宝塔 / Nginx：请使用 [Ubuntu + 宝塔部署](baota.md)**，避免独立 Caddy 占用现有网站的 80/443 端口。
+
 需要一台 Linux 服务器、Docker Compose、可解析到服务器公网 IPv4 的域名。默认示例使用 Caddy 自动申请证书、Node 信令和 coturn。此仓库不含已经上线的公共服务。
 
 v0.2.0 使用新的密码认证协议，**客户端和服务器需要一起升级**。设备码的所有权摘要保存在 `signaling_data` Docker 卷（容器内 `/data/devices.json`）。保留并备份此卷，不要使用 `docker compose down -v` 删除注册信息。丢失注册表后，服务器无法判断既有设备码的原所有者。
