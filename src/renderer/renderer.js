@@ -7,6 +7,8 @@ let epoch = 0, busy = false, sharing = false, allowControl = true, fullScreen = 
 let qualities, candidates = [], statsTimer, heartbeatTimer, connectionTimer, disconnectedTimer;
 let quality = 'balanced', lastStats = new Map(), eventQueue = Promise.resolve(), controlCount = 0, controlWindow = 0;
 let unattended = false, canAutoStart = false, preferredDisplays = [];
+let motionChannel, inputSequence = 0, lastMotionSequence = 0, hostScreenIds = [], visibleScreenIds = null;
+let qualityQueue = Promise.resolve(), secondWindow = null, detachedSurface = null, secondFullscreen = false;
 function renderUpdate(state) {
   $('update-version').textContent = `软件更新 · 当前 v${state.currentVersion}`;
   $('update-message').textContent = state.message;
@@ -27,9 +29,10 @@ function notice(message, error = false) { $('notice').textContent = message; $('
 function status(message, online = false) { $('status').textContent = message; $('status-dot').classList.toggle('online', online); }
 function setBusy(value) {
   busy = value;
-  for (const id of ['share', 'join', 'refresh', 'server', 'ice', 'remote-id', 'remote-password', 'host-password', 'unattended']) $(id).disabled = value;
+  for (const id of ['share', 'join', 'refresh', 'server', 'ice', 'relay-address', 'relay-user', 'relay-password', 'advanced-network', 'remote-id', 'remote-password', 'host-password', 'unattended']) $(id).disabled = value;
   $('auto-start').disabled = value || !canAutoStart || !$('unattended').checked;
   document.querySelectorAll('.screen-card input').forEach(input => { input.disabled = value; });
+  for (const id of ['relay-address', 'relay-user', 'relay-password']) $(id).disabled = value || $('advanced-network').checked;
   $('stop').hidden = !value;
 }
 const showError = error => notice(String(error.message || error).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''), true);
@@ -56,6 +59,12 @@ async function refreshScreens() {
 
 function sendData(message) {
   if (channel?.readyState !== 'open') return false;
+  if (['move', 'button', 'wheel', 'release'].includes(message.type)) message.sequence = ++inputSequence;
+  // 移动只保留新位置，不让丢包重传堵住点击、抬键和心跳。
+  if (message.type === 'move' && motionChannel?.readyState === 'open') {
+    if (motionChannel.bufferedAmount > 2048) return false;
+    motionChannel.send(JSON.stringify(message)); return true;
+  }
   // 移动事件可以丢弃，按键与抬起事件必须保留；严重拥塞时主动断开并释放按键。
   if (channel.bufferedAmount > 32768 && message.type === 'move') return false;
   if (channel.bufferedAmount > 262144) { void stopAll('控制通道拥塞，已断开以释放按键'); return false; }
@@ -66,15 +75,18 @@ function clearPeer() {
   epoch++;
   clearInterval(statsTimer); clearInterval(heartbeatTimer); clearTimeout(connectionTimer); clearTimeout(disconnectedTimer);
   release();
+  closeSecondScreen();
   if (pc) { pc.onconnectionstatechange = null; pc.onicecandidate = null; pc.ontrack = null; pc.close(); pc = null; }
-  channel = null;
+  channel = motionChannel = null; inputSequence = lastMotionSequence = 0;
+  hostScreenIds = []; visibleScreenIds = null;
   for (const stream of captureStreams) for (const track of stream.getTracks()) { track.onended = null; track.stop(); }
   captureStreams = []; candidates = []; remoteScreens = []; lastStats.clear();
   sessionId = pendingId = null;
   $('request').hidden = $('host-active').hidden = $('session').hidden = true;
   $('setup').hidden = false;
   $('videos').replaceChildren();
-  document.body.classList.remove('session-mode');
+  document.body.classList.remove('session-mode', 'session-fullscreen');
+  $('separate-screen').disabled = true;
   if (fullScreen) { fullScreen = false; void api.fullscreen(false); $('fullscreen').textContent = '全屏'; }
 }
 async function stopAll(message = '连接已结束') {
@@ -99,7 +111,8 @@ async function start(roleName) {
   quality = $('quality').value;
   setBusy(true); status('连接服务器…'); notice('正在连接…');
   try {
-    await api.connect({ url: $('server').value.trim(), ice: $('ice').value.trim(), role,
+    const ice = $('advanced-network').checked ? $('ice').value.trim() : await api.relay({ server: $('server').value.trim(), address: $('relay-address').value, username: $('relay-user').value, password: $('relay-password').value });
+    await api.connect({ url: $('server').value.trim(), ice, role,
       screens: [...document.querySelectorAll('.screen-card input:checked')].map(input => input.value),
       id: $('remote-id').value.replace(/\s/g, ''), password: $(role === 'host' ? 'host-password' : 'remote-password').value,
       unattended, autoStart: unattended && $('auto-start').checked });
@@ -113,41 +126,69 @@ async function applyQuality(name) {
   if (!qualities[name] || !pc) return;
   quality = name;
   const preset = qualities[name];
-  for (const sender of pc.getSenders()) {
+  const activeCount = Math.max(1, visibleScreenIds?.length || hostScreenIds.length);
+  for (const [index, sender] of pc.getSenders().entries()) {
     if (!sender.track || sender.track.kind !== 'video') continue;
     sender.track.contentHint = preset.hint;
+    const captureSize = sender.track.getSettings();
+    // 降低采集帧率以减少编码前的工作量；码率预算由当前显示的屏幕共用。
+    try { await sender.track.applyConstraints({ width: { ideal: captureSize.width }, height: { ideal: captureSize.height }, frameRate: { ideal: preset.fps, max: preset.fps } }); } catch { /* 部分采集源不支持动态约束，仍通过编码器限帧。 */ }
     const settings = sender.track.getSettings();
     const params = sender.getParameters();
     if (!params.encodings?.length) continue;
-    params.encodings[0].maxBitrate = preset.bitrate;
+    params.encodings[0].active = !visibleScreenIds || visibleScreenIds.includes(hostScreenIds[index]);
+    params.encodings[0].maxBitrate = Math.floor(preset.bitrate / activeCount);
     params.encodings[0].maxFramerate = preset.fps;
     params.encodings[0].scaleResolutionDownBy = Math.max(1, (settings.width || 1920) / preset.width, (settings.height || 1080) / preset.height);
-    params.degradationPreference = name === 'smooth' ? 'maintain-framerate' : 'maintain-resolution';
+    params.degradationPreference = ['smooth', 'economy'].includes(name) ? 'maintain-framerate' : 'balanced';
     await sender.setParameters(params);
   }
 }
 
+function queueQuality(name) {
+  const token = epoch;
+  qualityQueue = qualityQueue.catch(() => {}).then(() => { if (token === epoch) return applyQuality(name); });
+  return qualityQueue;
+}
+
+function receiveInput(event, token, motionOnly = false) {
+  if (token !== epoch || role !== 'host' || typeof event.data !== 'string' || event.data.length > 16384) return;
+  if (Date.now() - controlWindow > 1000) { controlWindow = Date.now(); controlCount = 0; }
+  if (++controlCount > 500) { void stopAll('输入频率异常，已停止共享'); return; }
+  try {
+    const message = JSON.parse(event.data);
+    if (motionOnly && message.type !== 'move') return;
+    if (message.type === 'quality') { void action(() => queueQuality(message.value)); return; }
+    if (message.type === 'view') {
+      if (!Array.isArray(message.screens) || !message.screens.length || message.screens.length > 2 || message.screens.some(id => !hostScreenIds.includes(id))) return;
+      visibleScreenIds = [...new Set(message.screens)]; void action(() => queueQuality(quality)); return;
+    }
+    if (Number.isSafeInteger(message.sequence)) {
+      if (message.type === 'move' && message.sequence <= lastMotionSequence) return;
+      lastMotionSequence = Math.max(lastMotionSequence, message.sequence);
+    } else if (motionOnly) return;
+    api.input(message);
+  } catch { /* 忽略无效数据，不影响当前视频。 */ }
+}
+
 function attachChannel(dataChannel, token) {
+  if (dataChannel.label === 'motion' && !motionChannel) {
+    motionChannel = dataChannel;
+    motionChannel.onmessage = event => receiveInput(event, token, true);
+    return;
+  }
   if (dataChannel.label !== 'control' || channel) { dataChannel.close(); return; }
   channel = dataChannel;
   channel.onopen = () => {
     if (token !== epoch) return;
     if (role === 'viewer') {
       sendData({ type: 'quality', value: $('quality').value });
+      updateLayout();
       heartbeatTimer = setInterval(() => sendData({ type: 'heartbeat' }), 1000);
     }
   };
   channel.onclose = () => { if (token === epoch) void endSession('对方已断开，等待下次连接'); };
-  channel.onmessage = event => {
-    if (token !== epoch || role !== 'host' || typeof event.data !== 'string' || event.data.length > 16384) return;
-    if (Date.now() - controlWindow > 1000) { controlWindow = Date.now(); controlCount = 0; }
-    if (++controlCount > 500) { void stopAll('输入频率异常，已停止共享'); return; }
-    try {
-      const message = JSON.parse(event.data);
-      if (message.type === 'quality') { void action(() => applyQuality(message.value)); return; }
-      api.input(message);
-    } catch { /* 忽略无效数据，不影响当前视频。 */ }
-  };
+  channel.onmessage = event => receiveInput(event, token);
 }
 
 async function createPeer(message) {
@@ -177,6 +218,8 @@ async function createPeer(message) {
     $('host-active').hidden = false;
     status('已允许，正在共享…', true);
     attachChannel(peer.createDataChannel('control', { ordered: true }), token);
+    attachChannel(peer.createDataChannel('motion', { ordered: false, maxRetransmits: 0 }), token);
+    hostScreenIds = message.screens.map(display => display.id);
     for (const display of message.screens) {
       const id = await api.capture(display.id);
       if (token !== epoch) return;
@@ -196,7 +239,7 @@ async function createPeer(message) {
     const screens = message.screens.map((display, index) => ({ id: display.id, name: `屏幕 ${index + 1}`, width: display.width, height: display.height,
       mid: peer.getTransceivers()[index].mid }));
     await api.signal({ type: 'offer', sdp: peer.localDescription.sdp, screens });
-    await applyQuality(quality);
+    await queueQuality(quality);
   } else {
     $('setup').hidden = true; $('session').hidden = false;
     document.body.classList.add('session-mode');
@@ -204,6 +247,8 @@ async function createPeer(message) {
     peer.ondatachannel = event => { if (token === epoch) attachChannel(event.channel, token); };
     peer.ontrack = event => {
       if (token !== epoch) return;
+      // 低延迟偏好由浏览器在网络允许时采用，不强行积攒播放缓冲。
+      if ('jitterBufferTarget' in event.receiver) event.receiver.jitterBufferTarget = 0;
       const display = remoteScreens.find(screen => screen.mid === event.transceiver.mid);
       if (display) addVideo(display, new MediaStream([event.track]));
     };
@@ -250,6 +295,7 @@ function addVideo(display, stream) {
   const video = document.createElement('video'); video.autoplay = true; video.muted = true; video.playsInline = true; video.srcObject = stream;
   surface.append(label, video); $('videos').append(surface);
   void video.play().catch(showError);
+  $('separate-screen').disabled = remoteScreens.length < 2 || $('videos').children.length < 2;
   let lastMove = 0, pointerHeld = false;
   const point = event => pointerPosition(video, event);
   video.addEventListener('pointerdown', event => {
@@ -269,12 +315,12 @@ function addVideo(display, stream) {
   video.addEventListener('lostpointercapture', () => { if (pointerHeld) { pointerHeld = false; release(); } });
   video.addEventListener('pointercancel', () => { pointerHeld = false; release(); });
   video.addEventListener('pointermove', event => {
-    if (!allowControl || document.activeElement !== surface || performance.now() - lastMove < 16) return;
+    if (!allowControl || surface.ownerDocument.activeElement !== surface || performance.now() - lastMove < 16) return;
     const position = point(event); if (!position || !position.inside && !video.hasPointerCapture(event.pointerId)) return;
     lastMove = performance.now(); sendData({ type: 'move', screen: display.id, ...position });
   });
   video.addEventListener('wheel', event => {
-    if (!allowControl || document.activeElement !== surface) return;
+    if (!allowControl || surface.ownerDocument.activeElement !== surface) return;
     const position = point(event); if (!position?.inside) return;
     event.preventDefault();
     const delta = event.deltaMode === 1 ? event.deltaY * 40 : event.deltaMode === 2 ? event.deltaY * 600 : event.deltaY;
@@ -295,8 +341,49 @@ function updateLayout() {
   release();
   const value = $('layout').value;
   for (const surface of $('videos').children) surface.hidden = value !== 'all' && surface.dataset.screen !== value;
-  $('videos').classList.toggle('single', value !== 'all' || remoteScreens.length === 1);
+  $('videos').classList.toggle('single', value !== 'all' || remoteScreens.length === 1 || Boolean(detachedSurface));
+  const screens = remoteScreens.filter(display => value === 'all' || display.id === value || display.id === detachedSurface?.dataset.screen).map(display => display.id);
+  if (screens.length) sendData({ type: 'view', screens });
 }
+
+function closeSecondScreen() {
+  const child = secondWindow; secondWindow = null;
+  secondFullscreen = false;
+  if (detachedSurface) {
+    $('videos').append(detachedSurface); detachedSurface = null;
+    $('layout').value = 'all'; updateLayout();
+  }
+  if (child && !child.closed) child.close();
+  $('separate-screen').textContent = '双屏分窗';
+}
+function separateScreens() {
+  if (secondWindow && !secondWindow.closed) { closeSecondScreen(); return; }
+  if (remoteScreens.length < 2) return;
+  secondWindow = window.open('screen.html', 'ydesk-second-screen');
+  if (!secondWindow) throw new Error('无法打开第二屏窗口，请重新连接后重试');
+}
+window.addEventListener('message', event => {
+  if (!secondWindow || event.source !== secondWindow || event.data !== 'ydesk-screen-ready') return;
+  const child = secondWindow;
+  const surface = [...$('videos').children].find(item => item.dataset.screen === remoteScreens[1]?.id);
+  if (!surface) { closeSecondScreen(); return; }
+  // 同源子窗口直接复用现有视频元素，不增加 WebRTC 连接或重复编码。
+  detachedSurface = surface; surface.hidden = false;
+  child.document.getElementById('screen-content').append(surface);
+  child.document.getElementById('screen-title').textContent = remoteScreens[1].name;
+  child.document.getElementById('screen-return').addEventListener('click', closeSecondScreen);
+  const fullscreenButton = child.document.getElementById('screen-fullscreen');
+  fullscreenButton.addEventListener('click', () => void action(async () => {
+    secondFullscreen = await api.screenFullscreen(!secondFullscreen);
+    fullscreenButton.textContent = secondFullscreen ? '退出全屏' : '全屏';
+  }));
+  child.addEventListener('blur', release);
+  child.addEventListener('beforeunload', () => { if (secondWindow === child) closeSecondScreen(); });
+  $('layout').value = remoteScreens[0].id; updateLayout();
+  void surface.querySelector('video').play().catch(showError);
+  $('separate-screen').textContent = '合并双屏';
+  notice('屏幕 2 已在独立窗口打开，可拖动到另一台显示器并全屏。');
+});
 
 function startStats(peer, token) {
   let collecting = false;
@@ -313,14 +400,19 @@ function startStats(peer, token) {
           const elapsed = previous ? (report.timestamp - previous.time) / 1000 : 0;
           const bitrate = elapsed > 0 ? (report.bytesReceived - previous.bytes) * 8 / elapsed / 1e6 : 0;
           const fps = elapsed > 0 ? (report.framesDecoded - previous.frames) / elapsed : 0;
-          lastStats.set(report.id, { time: report.timestamp, bytes: report.bytesReceived, frames: report.framesDecoded || 0 });
+          const emitted = (report.jitterBufferEmittedCount || 0) - (previous?.emitted || 0);
+          const bufferMs = emitted > 0 ? Math.round(((report.jitterBufferDelay || 0) - (previous?.buffer || 0)) / emitted * 1000) : 0;
+          lastStats.set(report.id, { time: report.timestamp, bytes: report.bytesReceived, frames: report.framesDecoded || 0, emitted: report.jitterBufferEmittedCount || 0, buffer: report.jitterBufferDelay || 0 });
           const codec = reports.get(report.codecId)?.mimeType?.replace('video/', '') || '';
-          videos.push(`${report.frameWidth || '—'}×${report.frameHeight || '—'} ${Math.round(fps)}fps ${bitrate.toFixed(1)}Mbps ${codec}`);
+          videos.push(`${report.frameWidth || '—'}×${report.frameHeight || '—'} ${Math.round(fps)}fps ${bitrate.toFixed(1)}Mbps ${codec} 缓冲 ${bufferMs}ms`);
         }
         if (report.type === 'transport' && report.selectedCandidatePairId) {
           const pair = reports.get(report.selectedCandidatePairId);
           if (pair?.currentRoundTripTime !== undefined) rtt = Math.round(pair.currentRoundTripTime * 1000);
-          route = [reports.get(pair?.localCandidateId), reports.get(pair?.remoteCandidateId)].some(candidate => candidate?.candidateType === 'relay') ? '中继' : '直连';
+          const endpoints = [reports.get(pair?.localCandidateId), reports.get(pair?.remoteCandidateId)];
+          const relay = endpoints.find(candidate => candidate?.candidateType === 'relay');
+          const protocol = (relay?.relayProtocol || endpoints[0]?.protocol || '').toUpperCase();
+          route = `${relay ? '中继' : '直连'}${protocol ? ` ${protocol}` : ''}`;
         }
       });
       $('stats').textContent = videos.length ? videos.join(' / ') : '等待视频数据…';
@@ -332,6 +424,11 @@ function startStats(peer, token) {
 
 async function onEvent(message) {
   switch (message.type) {
+    case 'second-fullscreen':
+      secondFullscreen = message.enabled;
+      if (secondWindow && !secondWindow.closed) secondWindow.document.getElementById('screen-fullscreen').textContent = secondFullscreen ? '退出全屏' : '全屏';
+      break;
+    case 'fullscreen': setFullscreenUI(message.enabled); break;
     case 'update-state': renderUpdate(message.state); break;
     case 'registered':
       sharing = true; $('copy-invite').disabled = false;
@@ -395,16 +492,28 @@ $('copy-invite').addEventListener('click', () => void action(async () => {
   await api.copyInvite();
   notice('设备码和服务器已复制。请单独告知对方连接密码。');
 }));
-$('layout').addEventListener('change', updateLayout);
+$('layout').addEventListener('change', () => {
+  const value = $('layout').value; closeSecondScreen(); $('layout').value = value; updateLayout();
+});
+$('separate-screen').addEventListener('click', () => void action(separateScreens));
 $('quality').addEventListener('change', () => { sendData({ type: 'quality', value: $('quality').value }); notice('画质上限已调整，实际帧率与分辨率随网络和画面变化。'); });
 $('control-toggle').addEventListener('click', () => {
   release(); allowControl = !allowControl;
   $('control-toggle').textContent = allowControl ? '控制已开启' : '仅观看';
   $('control-toggle').setAttribute('aria-pressed', String(allowControl));
 });
-$('fullscreen').addEventListener('click', () => void action(async () => {
-  fullScreen = !fullScreen; await api.fullscreen(fullScreen); $('fullscreen').textContent = fullScreen ? '退出全屏' : '全屏';
-}));
+function setFullscreenUI(enabled) {
+  fullScreen = enabled;
+  document.body.classList.toggle('session-fullscreen', enabled && role === 'viewer');
+  $('fullscreen').textContent = enabled ? '退出全屏' : '全屏';
+}
+$('fullscreen').addEventListener('click', () => void action(async () => setFullscreenUI(await api.fullscreen(!fullScreen))));
+$('disconnect-session').addEventListener('click', () => void action(() => stopAll()));
+$('advanced-network').addEventListener('change', () => {
+  const advanced = $('advanced-network').checked;
+  $('advanced-ice').hidden = !advanced;
+  for (const id of ['relay-address', 'relay-user', 'relay-password']) $(id).disabled = advanced || busy;
+});
 $('send-text').addEventListener('click', () => {
   if (!allowControl) { notice('当前为仅观看模式，请先开启控制。'); return; }
   if (sendData({ type: 'text', text: $('remote-text').value })) { $('remote-text').value = ''; notice('文本已发送到远端当前输入位置。'); }
@@ -421,6 +530,18 @@ void action(async () => {
   canAutoStart = settings.canAutoStart; preferredDisplays = settings.displayIds;
   $('server').value = settings.url || localStorage.getItem('ydesk-server') || 'ws://127.0.0.1:21120';
   $('ice').value = settings.ice.length ? JSON.stringify(settings.ice, null, 2) : '';
+  // 识别常见的 coturn 配置并回填表单；其他自定义组合保留在高级编辑器。
+  const turn = settings.ice.find(item => [].concat(item.urls).some(url => url.startsWith('turn:')));
+  let simple = !settings.ice.length;
+  if (turn) {
+    const address = [].concat(turn.urls).find(url => url.startsWith('turn:')).slice(5).split('?')[0];
+    const generated = await api.relay({ server: $('server').value, address, username: turn.username, password: turn.credential }).catch(() => null);
+    const normalized = list => JSON.stringify(list.map(item => ({ urls: [].concat(item.urls).sort(), username: item.username || '', credential: item.credential || '' })).sort((a, b) => a.urls[0].localeCompare(b.urls[0])));
+    simple = generated && normalized(generated) === normalized(settings.ice);
+    if (simple) { $('relay-address').value = address; $('relay-user').value = turn.username; $('relay-password').value = turn.credential; }
+  }
+  $('advanced-network').checked = !simple;
+  $('advanced-network').dispatchEvent(new Event('change'));
   $('unattended').checked = settings.unattended;
   $('auto-start').checked = canAutoStart && settings.autoStart;
   $('auto-start').disabled = !canAutoStart || !settings.unattended;

@@ -50,7 +50,10 @@ const { passwordKey } = require('../src/auth.cjs');
     await page.locator('.screen-card').first().waitFor();
     await page.locator('#check-update').click();
     await expect(page.locator('#update-message')).toContainText(`v${nextVersion}`);
+    // 截图时显示但不抢焦点，避免 Windows 隐藏窗口停止合成导致超时。
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].showInactive());
     await page.screenshot({ path: resolve('test-results/update-available.png') });
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].hide());
     await page.locator('#download-update').click();
     await expect(page.locator('#update-message')).toContainText('更新失败', { timeout: 30000 });
     await expect(page.locator('#install-update')).toBeHidden();

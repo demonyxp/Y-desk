@@ -6,7 +6,7 @@ const { pathToFileURL } = require('node:url');
 const { spawn } = require('node:child_process');
 const { existsSync } = require('node:fs');
 const WebSocket = require('ws');
-const { serverUrl, iceServers, normalizeInput, QUALITY } = require('./shared.cjs');
+const { serverUrl, iceServers, relayServers, normalizeInput, QUALITY } = require('./shared.cjs');
 const { passwordKey, validatePassword } = require('./auth.cjs');
 const { settingsStore } = require('./settings.cjs');
 const { createUpdates } = require('./updates.cjs');
@@ -23,6 +23,8 @@ const canAutoStart = app.isPackaged && !process.env.PORTABLE_EXECUTABLE_FILE;
 if (!testMode && !app.requestSingleInstanceLock()) { app.quit(); }
 app.on('second-instance', () => { if (window) { window.show(); window.focus(); } });
 const pageUrl = pathToFileURL(join(__dirname, 'renderer/index.html')).href;
+const screenPageUrl = pathToFileURL(join(__dirname, 'renderer/screen.html')).href;
+let screenWindow;
 const emit = message => { if (window && !window.isDestroyed()) window.webContents.send('event', message); };
 
 function send(message) {
@@ -40,6 +42,7 @@ function stopInput() {
   }
 }
 function stopSession() {
+  screenWindow?.close();
   stopInput();
   sessionId = pendingId = approvedId = null;
   if (blocker !== undefined && powerSaveBlocker.isStarted(blocker)) powerSaveBlocker.stop(blocker);
@@ -131,8 +134,11 @@ async function listScreens() {
   return availableDisplays;
 }
 handle('screens', listScreens);
+handle('relay', relayServers);
 handle('settings', () => ({
-  id: profile.identity.id, url: profile.url, ice: profile.ice || [], displayIds: profile.displayIds || [],
+  id: profile.identity.id,
+  url: profile.autoShare ? profile.url : profile.network?.url || profile.url,
+  ice: (profile.autoShare ? profile.ice : profile.network?.ice || profile.ice) || [], displayIds: profile.displayIds || [],
   unattended: Boolean(profile.unattended), autoStart: Boolean(profile.autoStart),
   autoShare: Boolean(profile.autoShare && profile.unattended && profile.password),
   passwordSaved: Boolean(profile.password), canAutoStart
@@ -164,12 +170,16 @@ async function connectTo(options, retry = false) {
   allowedDisplays = hosting ? availableDisplays.filter(display => options.screens.includes(display.id)) : [];
   if (!retry) {
     desired = hosting && options.unattended ? { ...options, url, ice, password, displayIds: allowedDisplays.map(display => display.displayId) } : null;
+    // 中继密码沿用 Windows 加密存储，控制端和普通共享也不必反复填写。
+    const network = { url, ice };
     if (hosting) {
-      const next = { ...profile, url, ice: options.unattended ? ice : [], displayIds: allowedDisplays.map(display => display.displayId),
+      const next = { ...profile, network, url, ice: options.unattended ? ice : [], displayIds: allowedDisplays.map(display => display.displayId),
         unattended: Boolean(options.unattended), autoStart: Boolean(options.autoStart), autoShare: Boolean(options.unattended) };
       if (options.unattended) next.password = password; else delete next.password;
       store.save(next); profile = next;
       if (canAutoStart && !testMode) app.setLoginItemSettings({ openAtLogin: profile.autoStart, path: process.execPath, args: ['--autostart'], name: 'Y-Desk' });
+    } else {
+      const next = { ...profile, network }; store.save(next); profile = next;
     }
     updateTray();
   }
@@ -261,7 +271,11 @@ handle('leave', () => {
   stopSession();
 });
 handle('disconnect', stopSharing);
-handle('fullscreen', enabled => window.setFullScreen(Boolean(enabled)));
+handle('fullscreen', enabled => { window.setFullScreen(Boolean(enabled)); return Boolean(enabled); });
+handle('screen-fullscreen', enabled => {
+  if (!screenWindow || screenWindow.isDestroyed()) throw new Error('第二屏窗口已关闭');
+  screenWindow.setFullScreen(Boolean(enabled)); return Boolean(enabled);
+});
 handle('copy-device-id', () => clipboard.writeText(profile.identity.id));
 handle('copy-invite', () => {
   if (!hosting || !invitation) throw new Error('请先开启共享');
@@ -300,7 +314,24 @@ app.whenReady().then(() => {
     show: !testMode && !process.argv.includes('--autostart'),
     webPreferences: { preload: join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false }
   });
-  window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  window.webContents.setWindowOpenHandler(({ url, frameName }) => {
+    if (url !== screenPageUrl || frameName !== 'ydesk-second-screen' || hosting || !sessionId || screenWindow) return { action: 'deny' };
+    const current = screen.getDisplayMatching(window.getBounds());
+    const target = screen.getAllDisplays().find(display => display.id !== current.id) || current;
+    return { action: 'allow', overrideBrowserWindowOptions: {
+      ...target.workArea, minWidth: 400, minHeight: 300, title: 'Y-Desk · 屏幕 2',
+      show: !testMode, autoHideMenuBar: true, backgroundColor: '#152435',
+      webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false }
+    } };
+  });
+  window.webContents.on('did-create-window', child => {
+    screenWindow = child;
+    child.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    child.webContents.on('will-navigate', (event, url) => { if (url !== screenPageUrl) event.preventDefault(); });
+    for (const name of ['enter-full-screen', 'leave-full-screen']) child.on(name, () => emit({ type: 'second-fullscreen', enabled: child.isFullScreen() }));
+    child.on('closed', () => { if (screenWindow === child) screenWindow = null; });
+  });
+  for (const name of ['enter-full-screen', 'leave-full-screen']) window.on(name, () => emit({ type: 'fullscreen', enabled: window.isFullScreen() }));
   window.webContents.on('will-navigate', event => event.preventDefault());
   window.webContents.session.setPermissionRequestHandler((contents, permission, callback) => {
     callback(contents === window.webContents && permission === 'media' && hosting && Boolean(sessionId));

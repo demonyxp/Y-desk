@@ -24,9 +24,13 @@
         <summary>连接服务器 <span id="server-summary">首次使用，请配置同一个服务器</span></summary>
         <div class="network-fields">
           <label>信令服务器<input id="server" placeholder="wss://desk.example.com" value="ws://127.0.0.1:21120" spellcheck="false"></label>
-          <label>STUN / TURN 配置 <span class="muted">JSON，可留空用于局域网</span><textarea id="ice" rows="2" spellcheck="false" placeholder='[{"urls":"stun:stun.example.com:3478"}]'></textarea></label>
+          <label>中继地址 <span class="muted">留空使用信令服务器的域名</span><input id="relay-address" placeholder="自动使用左侧域名，端口 3478" spellcheck="false"></label>
+          <label>中继账号<input id="relay-user" placeholder="例如 ydesk" autocomplete="off" spellcheck="false"></label>
+          <label>中继密码<input id="relay-password" type="password" placeholder="安装 coturn 时设置的密码" autocomplete="off"></label>
         </div>
-        <p class="hint">公网使用 wss:// 和 TURN 中继；本机测试可用默认地址。TURN 凭据仅在本次运行中保留。</p>
+        <p class="hint">连接时优先直连，无法直连才使用中继。账号和密码同时留空可仅使用直连；连接后配置加密保存在本机。</p>
+        <label class="toggle-line"><input id="advanced-network" type="checkbox">高级配置：手动填写 STUN / TURN JSON</label>
+        <label id="advanced-ice" hidden>STUN / TURN 配置<textarea id="ice" rows="3" spellcheck="false" placeholder='[{"urls":"stun:stun.example.com:3478"}]'></textarea></label>
       </details>
       <div class="connection-grid">
         <section class="panel host-panel">
@@ -69,9 +73,11 @@
         <div><h2>远程桌面</h2><span id="session-detail" class="muted">正在建立视频连接…</span></div>
         <div class="session-controls">
           <label class="compact">显示<select id="layout"><option value="all">双屏并排</option></select></label>
-          <label class="compact">画质<select id="quality"><option value="smooth">流畅 · 1080p / 30</option><option value="balanced" selected>高清 · 1440p / 60</option><option value="ultra">原画 · 4K / 60</option></select></label>
+          <label class="compact">画质<select id="quality"><option value="economy">低带宽 · 720p / 30</option><option value="smooth" selected>流畅 · 1080p / 30</option><option value="balanced">高清 · 1440p / 60</option><option value="ultra">原画 · 4K / 60</option></select></label>
+          <button id="separate-screen" class="secondary" disabled>双屏分窗</button>
           <button id="control-toggle" class="secondary" aria-pressed="true">控制已开启</button>
           <button id="fullscreen" class="secondary">全屏</button>
+          <button id="disconnect-session" class="danger">断开</button>
         </div>
       </div>
       <div id="videos" class="videos"></div>
@@ -80,6 +86,6 @@
     </section>
     <div class="bottom-actions"><p id="notice" role="status" aria-live="polite">画面经 WebRTC 加密传输。实际清晰度与流畅度取决于网络及硬件。</p><button id="stop" class="danger" hidden>停止共享 / 断开</button></div>
   </main>
-  <footer class="app-footer"><span>Y-DESK / WINDOWS</span><span>双屏 · 实时 · 由你掌控</span><span>v0.3.0</span></footer>
+  <footer class="app-footer"><span>Y-DESK / WINDOWS</span><span>双屏 · 实时 · 由你掌控</span><span>v0.4.0</span></footer>
 </body>
 </html>

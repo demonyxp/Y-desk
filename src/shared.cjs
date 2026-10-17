@@ -1,10 +1,22 @@
 'use strict';
 
 const QUALITY = Object.freeze({
+  economy: { label: '低带宽', width: 1280, height: 720, fps: 30, bitrate: 1_500_000, hint: 'motion' },
   smooth: { label: '流畅', width: 1920, height: 1080, fps: 30, bitrate: 4_000_000, hint: 'motion' },
   balanced: { label: '高清', width: 2560, height: 1440, fps: 60, bitrate: 12_000_000, hint: 'detail' },
   ultra: { label: '原画', width: 3840, height: 2160, fps: 60, bitrate: 25_000_000, hint: 'detail' }
 });
+
+function relayServers({ server, address, username, password }) {
+  if (!username && !password) return [];
+  if (!username?.trim() || !password) throw new Error('请填写中继账号和密码，或同时留空使用直连');
+  const host = address?.trim() || new URL(serverUrl(server)).hostname;
+  if (!/^(\[[0-9a-f:]+\]|[a-z0-9.-]+)(:\d{1,5})?$/i.test(host)) throw new Error('中继地址请填写域名或 IP，可附端口，例如 desk.example.com:3478');
+  const match = host.match(/:(\d+)$/);
+  if (match && (+match[1] < 1 || +match[1] > 65535)) throw new Error('中继端口应为 1–65535');
+  const endpoint = match ? host : `${host}:3478`;
+  return iceServers([{ urls: `stun:${endpoint}` }, { urls: [`turn:${endpoint}?transport=udp`, `turn:${endpoint}?transport=tcp`], username: username.trim(), credential: password }]);
+}
 
 function serverUrl(value) {
   const url = new URL(value);
@@ -95,4 +107,4 @@ function normalizeInput(message, displays, toPhysical = point => point) {
   return result;
 }
 
-module.exports = { QUALITY, serverUrl, iceServers, normalizeInput, keyCode };
+module.exports = { QUALITY, serverUrl, iceServers, relayServers, normalizeInput, keyCode };

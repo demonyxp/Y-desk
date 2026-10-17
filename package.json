@@ -1,6 +1,6 @@
 {
   "name": "y-desk",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Windows 双显示器远程桌面，基于 WebRTC 的实时共享与控制",
   "private": true,
   "main": "src/main.cjs",

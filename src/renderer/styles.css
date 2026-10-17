@@ -93,7 +93,7 @@ input::placeholder,textarea::placeholder { color:#8293a3; font-weight:400; }
 .remote-screen { display:flex; flex-direction:column; background:#152435; border:2px solid #2c425a; border-radius:9px; min-width:0; overflow:hidden; }
 .remote-screen:focus { border-color:var(--blue); outline:3px solid #a7c9ff; outline-offset:1px; }
 .remote-screen .screen-label { padding:8px 12px; background:#22364d; color:#c8d7e8; font-size:11px; pointer-events:none; }
-.remote-screen video { display:block; width:100%; height:calc(100vh - 365px); min-height:300px; object-fit:contain; flex:1; cursor:crosshair; }
+.remote-screen video { display:block; width:100%; height:calc(100vh - 365px); min-height:300px; object-fit:contain; flex:1; cursor:default; }
 .session-footer { display:flex; gap:18px; align-items:center; justify-content:space-between; color:var(--muted); font-size:11px; padding:12px 0; }
 #stats { text-align:right; font:11px Consolas,'Microsoft YaHei',monospace; }
 .text-transfer { background:#e5edf6; border-radius:8px; padding:11px 14px; }
@@ -106,6 +106,27 @@ input::placeholder,textarea::placeholder { color:#8293a3; font-weight:400; }
 body.session-mode main { max-width:none; padding-top:22px; }
 body.session-mode .app-header { height:68px; }
 body.session-mode .app-footer { display:none; }
+#disconnect-session { display:none; }
+body.session-fullscreen { overflow:hidden; }
+body.session-fullscreen .app-header,body.session-fullscreen .bottom-actions,body.session-fullscreen .text-transfer,body.session-fullscreen .update-panel { display:none; }
+body.session-fullscreen main { height:100vh; padding:8px 10px; }
+body.session-fullscreen #session { height:100%; display:flex; flex-direction:column; }
+body.session-fullscreen .session-toolbar { padding-bottom:8px; flex:none; }
+body.session-fullscreen #videos { flex:1; min-height:0; grid-template-rows:minmax(0,1fr); }
+body.session-fullscreen .remote-screen { min-height:0; }
+body.session-fullscreen video { height:0; min-height:0; }
+body.session-fullscreen .session-footer { padding:5px 0; flex:none; }
+body.session-fullscreen .session-footer p { display:none; }
+body.session-fullscreen #disconnect-session { display:block; }
+.screen-window { height:100vh; overflow:hidden; display:flex; flex-direction:column; background:#152435; color:#e0e9f4; }
+.screen-window-toolbar { display:flex; align-items:center; gap:12px; padding:8px 12px; flex:none; }
+.screen-window-toolbar span { flex:1; font-size:12px; }
+.screen-window-toolbar button { padding:7px 10px; white-space:nowrap; }
+.screen-window main { flex:1; min-height:0; width:100%; max-width:none; padding:0; margin:0; display:flex; }
+.screen-window .remote-screen { flex:1; min-height:0; border-radius:0; }
+.screen-window .screen-label { display:none; }
+.screen-window video { height:0; min-height:0; }
+@media(max-width:600px) { .screen-window-toolbar span { display:none; } .screen-window-toolbar strong { flex:1; } }
 body.sharing-mode .intro,body.sharing-mode .viewer-panel { display:none; }
 body.sharing-mode .connection-grid { grid-template-columns:1fr; }
 body.sharing-mode .host-panel { display:grid; grid-template-columns:1fr 1fr; gap:14px 24px; }

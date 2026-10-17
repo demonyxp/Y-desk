@@ -89,7 +89,9 @@ systemctl status coturn --no-pager
 journalctl -u coturn -n 50 --no-pager
 ```
 
-两台客户端都填写：
+v0.4.0 及以上客户端：信令填 `wss://desk.yinsane.xyz`，中继地址留空，账号填 `ydesk`，密码填上面配置的中继密码。连接后会加密保存，不需要手写 JSON。
+
+旧版客户端或高级 JSON 模式，两台客户端都填写：
 
 ```json
 [

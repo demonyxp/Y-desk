@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { serverUrl, iceServers, normalizeInput, keyCode } = require('../src/shared.cjs');
+const { serverUrl, iceServers, relayServers, normalizeInput, keyCode } = require('../src/shared.cjs');
 
 test('公网只接受 TLS 信令，拒绝 URL 中携带凭据', () => {
   assert.equal(serverUrl('ws://127.0.0.1:21120'), 'ws://127.0.0.1:21120/');
@@ -13,6 +13,17 @@ test('校验 TURN 地址并仅传递已知配置', () => {
   assert.deepEqual(iceServers('[{"urls":"turn:example.com:3478","username":"u","credential":"p","other":1}]'),
     [{ urls: ['turn:example.com:3478'], username: 'u', credential: 'p' }]);
   for (const value of ['{}', '[null]', '[{"urls":"https://example.com"}]']) assert.throws(() => iceServers(value));
+});
+
+test('简单中继表单使用信令域名，支持自定义端口并拒绝无效地址', () => {
+  const settings = { server: 'wss://desk.example.com', username: 'ydesk', password: 'secret' };
+  const result = relayServers(settings);
+  assert.equal(result[0].urls[0], 'stun:desk.example.com:3478');
+  assert.deepEqual(result[1], { urls: ['turn:desk.example.com:3478?transport=udp', 'turn:desk.example.com:3478?transport=tcp'], username: 'ydesk', credential: 'secret' });
+  assert.equal(relayServers({ ...settings, address: '[::1]:3479' })[0].urls[0], 'stun:[::1]:3479');
+  assert.deepEqual(relayServers({ server: settings.server }), []);
+  for (const address of ['https://example.com', 'example.com/path', 'example.com:0', 'example.com:99999', 'x?transport=tcp']) assert.throws(() => relayServers({ ...settings, address }));
+  assert.throws(() => relayServers({ ...settings, password: '' }));
 });
 test('左侧负坐标显示器与 DPI 转换使用目标屏幕边界', () => {
   const displays = [{ id: 'left', bounds: { x: -1920, y: -200, width: 1920, height: 1080 } }];
