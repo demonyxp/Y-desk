@@ -1,0 +1,90 @@
+const { test, expect, _electron: electron } = require('@playwright/test');
+const { mkdtempSync, writeFileSync, readFileSync, existsSync, readdirSync } = require('node:fs');
+const { tmpdir } = require('node:os');
+const { join } = require('node:path');
+const { createSignalingServer } = require('../tests/helpers/signaling-server.cjs');
+
+test('会话工具：双向剪贴板、文件传输、设备历史、ICE 重协商和断开清理', async ({}, testInfo) => {
+  test.setTimeout(120000);
+  const server = createSignalingServer({ port: 0 }), { port } = await server.listen();
+  const dir = mkdtempSync(join(tmpdir(), 'ydesk-tools-e2e-')), apps = [];
+  const input = join(dir, 'source.bin'), received = join(dir, 'received.bin');
+  const content = Buffer.alloc(300000); for (let i = 0; i < content.length; i++) content[i] = i % 251;
+  writeFileSync(input, content);
+  try {
+    const launch = async name => {
+      const env = { ...process.env, YDESK_TEST_MODE: '1', YDESK_PROFILE: mkdtempSync(join(tmpdir(), `ydesk-${name}-`)) }; delete env.ELECTRON_RUN_AS_NODE;
+      const app = await electron.launch({ args: ['.'], env }); apps.push(app);
+      const page = await app.firstWindow(); await expect(page.locator('.screen-card').first()).toBeVisible();
+      await app.evaluate(({ BrowserWindow }) => { BrowserWindow.getAllWindows().forEach(window => window.showInactive()); });
+      await page.locator('#network-settings').evaluate(element => { element.open = true; });
+      await page.locator('#server').fill(`ws://127.0.0.1:${port}`);
+      await app.evaluate(({ clipboard }, name) => { globalThis.testClip = name; clipboard.readText = () => globalThis.testClip; clipboard.writeText = value => { globalThis.testClip = value; }; }, name);
+      return { app, page };
+    };
+    const host = await launch('host'), viewer = await launch('viewer');
+    await host.page.locator('#test-network').click(); await expect(host.page.locator('#network-result')).toContainText('信令可连接');
+    await host.page.locator('#host-password').fill('Tools-Secret#2026'); await host.page.locator('#share').click();
+    await expect(host.page.locator('#status')).toContainText('等待连接');
+    const id = (await host.page.locator('#device-id').textContent()).replace(/\s/g, '');
+    await viewer.page.locator('#remote-id').fill(id); await viewer.page.locator('#remote-password').fill('Tools-Secret#2026'); await viewer.page.locator('#join').click();
+    await host.page.locator('#accept').click(); await expect(viewer.page.locator('#status')).toContainText('已连接');
+    await expect.poll(() => viewer.page.evaluate(() => toolsUI.fileChannel?.readyState)).toBe('open');
+    expect(await viewer.page.evaluate(() => toolsUI.remote)).toBe(true);
+    expect((await viewer.page.evaluate(() => window.ydesk.tools('devices')))[0].id).toBe(id);
+    await host.page.locator('#host-tools').click(); await viewer.page.locator('#tools-toggle').click();
+    await host.page.locator('#clipboard-enable').check(); await viewer.page.locator('#clipboard-enable').check();
+    await expect.poll(() => host.page.evaluate(() => toolsUI.lastClipboard)).toBe('host');
+    await expect.poll(() => viewer.page.evaluate(() => toolsUI.lastClipboard)).toBe('viewer');
+    await viewer.app.evaluate(() => { globalThis.testClip = '控制端 → 被控端：中文'; });
+    await expect.poll(() => host.app.evaluate(() => globalThis.testClip)).toBe('控制端 → 被控端：中文');
+    await host.app.evaluate(() => { globalThis.testClip = '被控端 → 控制端'; });
+    await expect.poll(() => viewer.app.evaluate(() => globalThis.testClip)).toBe('被控端 → 控制端');
+    await host.page.locator('#clipboard-enable').uncheck();
+    await viewer.app.evaluate(() => { globalThis.testClip = '不应同步'; });
+    await expect.poll(() => viewer.page.evaluate(() => toolsUI.remoteClipboard)).toBe(false);
+    expect(await host.app.evaluate(() => globalThis.testClip)).toBe('被控端 → 控制端');
+    await host.app.evaluate(({ dialog }, path) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath: path }); }, received);
+    await viewer.app.evaluate(({ dialog }, path) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] }); }, input);
+    await viewer.page.locator('#send-file').click();
+    await expect.poll(async () => {
+      if (existsSync(received)) return 'complete';
+      const errors = await Promise.all([host.page, viewer.page].map(page => page.locator('#notice').textContent()));
+      if (errors.some(text => /失败|无效|取消/.test(text))) throw new Error(errors.join(' / '));
+      return JSON.stringify(await Promise.all([host.page, viewer.page].map(page => page.evaluate(() => ({ out: toolsUI.out && { offset: toolsUI.out.offset, ack: toolsUI.out.ack, size: toolsUI.out.size, started: toolsUI.out.started }, incoming: toolsUI.in && { offset: toolsUI.in.offset, size: toolsUI.in.size }, pending: Boolean(toolsUI.pending), bandwidth: toolsUI.bandwidth })))));
+    }, { timeout: 30000 }).toBe('complete');
+    expect(readFileSync(received).equals(content)).toBe(true);
+    await expect(viewer.page.locator('#notice')).toHaveText('文件发送完成。');
+    // 反向发送验证两个方向均通过本地文件选择和接收确认。
+    const reverse = join(dir, 'reverse.bin');
+    await host.app.evaluate(({ dialog }, path) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] }); }, input);
+    await viewer.app.evaluate(({ dialog }, path) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath: path }); }, reverse);
+    await host.page.locator('#send-file').click(); await expect.poll(() => existsSync(reverse), { timeout: 15000 }).toBe(true);
+    expect(readFileSync(reverse).equals(content)).toBe(true);
+    // 传输中仍能送达输入，取消后双方清理任务及未完成文件。
+    const cancelled = join(dir, 'cancelled.bin'); writeFileSync(input, Buffer.alloc(2 * 1024 * 1024, 9));
+    await host.app.evaluate(({ dialog }, path) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath: path }); }, cancelled);
+    await host.page.evaluate(() => { window.transferInputs = []; window.ydesk.onEvent(event => { if (event.type === 'test-input') window.transferInputs.push(event.data); }); });
+    await viewer.page.locator('#send-file').click();
+    await expect.poll(() => host.page.evaluate(() => toolsUI.in?.offset || 0)).toBeGreaterThan(0);
+    await viewer.page.evaluate(() => { sendData({ type: 'key', code: 'KeyQ', down: true }); sendData({ type: 'key', code: 'KeyQ', down: false }); });
+    await expect.poll(() => host.page.evaluate(() => window.transferInputs.join(''))).toContain('"vk":81');
+    await viewer.page.locator('#cancel-file').click();
+    await expect.poll(() => host.page.evaluate(() => toolsUI.in)).toBe(null);
+    await expect.poll(() => readdirSync(dir).some(file => file.endsWith('.part'))).toBe(false);
+    expect(existsSync(cancelled)).toBe(false);
+    await host.page.locator('#tools-close').click(); await viewer.page.locator('#tools-close').click();
+    const before = await host.page.evaluate(() => pc.localDescription.sdp.match(/a=ice-ufrag:(.*)/)[1]);
+    await host.page.evaluate(() => recoverPeer(pc, epoch));
+    await expect.poll(() => host.page.evaluate(() => pc.localDescription.sdp.match(/a=ice-ufrag:(.*)/)[1])).not.toBe(before);
+    await expect.poll(() => viewer.page.evaluate(() => pc.connectionState)).toBe('connected');
+    await expect.poll(() => viewer.page.evaluate(() => toolsUI.fileChannel.readyState)).toBe('open');
+    await viewer.page.locator('#scale').selectOption('original'); await expect(viewer.page.locator('.original-size').first()).toBeVisible();
+    await viewer.page.locator('#scale').selectOption('fit');
+    await viewer.page.locator('#tools-toggle').click(); await viewer.page.screenshot({ path: testInfo.outputPath('session-tools.png') });
+    await viewer.page.locator('#tools-close').click();
+    await viewer.page.locator('#stop').click();
+    expect(await viewer.page.evaluate(() => toolsUI.clipChannel)).toBe(null);
+    expect(readdirSync(dir).some(file => file.endsWith('.part'))).toBe(false);
+  } finally { for (const app of apps) await app.close(); await server.close(); }
+});

@@ -15,6 +15,7 @@ test('设备码在离线启动、连接失败和重启后始终可见并可复�
   try {
     app = await electron.launch({ args: ['.'], env });
     let page = await app.firstWindow();
+    await page.locator('#network-settings').evaluate(element => { element.open = true; });
     await expect(page.locator('#device-id')).toHaveText(/^\d{3} \d{3} \d{3}$/);
     await expect(page.locator('#device-id')).toBeInViewport();
     await expect(page.locator('#copy-invite')).toBeDisabled();

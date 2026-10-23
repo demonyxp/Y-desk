@@ -4,16 +4,20 @@ Windows 双显示器远程桌面。共享电脑当前正在使用的桌面，双
 
 **服务器部署：[Go 独立服务端（无需 Docker / Node.js）](docs/go-server.md)** · [Docker / Node.js 部署](docs/deployment.md)
 
-**[下载安装版](https://github.com/demonyxp/Y-desk/releases/latest/download/Y-Desk-Setup-0.4.0-win-x64.exe)** · **[下载免安装版](https://github.com/demonyxp/Y-desk/releases/latest/download/Y-Desk-0.4.0-win-x64.exe)** · [全部发布版本](https://github.com/demonyxp/Y-desk/releases)
+**[下载安装版](https://github.com/demonyxp/Y-desk/releases/latest/download/Y-Desk-Setup-0.5.0-win-x64.exe)** · **[下载免安装版](https://github.com/demonyxp/Y-desk/releases/latest/download/Y-Desk-0.5.0-win-x64.exe)** · [全部发布版本](https://github.com/demonyxp/Y-desk/releases)
 
-基于 Electron / Chromium 屏幕采集、WebRTC 实时视频和 Windows SendInput。没有逐帧截图轮询，也不上传录屏。**这是首个可运行版本，不承诺任意硬件、任意网络下均无卡顿。**
+基于 Electron / Chromium 屏幕采集、WebRTC 实时视频和 Windows SendInput。没有逐帧截图轮询，也不上传录屏。实际流畅度取决于两端硬件、网络与中继线路。
 
-## v0.4.0 使用改进
+## v0.5.0 使用改进
 
 - 中继地址、账号、密码直接填写，地址留空沿用信令域名；连接后加密保存，不再要求手写 JSON。
 - 点击“双屏分窗”将远端屏幕 2 放到独立窗口，本地有第二个显示器时优先放到该屏幕；两个窗口可分别全屏和控制。
-- 默认流畅档，两屏合计码率上限 4 Mbps；低带宽档合计 1.5 Mbps。只看一屏时暂停另一屏传输，恢复双屏后继续发送。
+- 默认自动档，1080p / 30 帧目标，两屏合计码率在 1.5–12 Mbps 内调整；持续 CPU 受限时降低采集帧率，恢复后逐级提高。只看一屏时暂停另一屏传输。
 - 鼠标移动使用独立低延迟通道；统计显示中继协议、RTT 和接收缓冲。静止桌面可能主动减少帧数，流畅度仍受网络和硬件影响。
+- 全屏工具栏自动隐藏，支持适应窗口、原始大小、指定本地显示器与交换双屏。短暂断网尝试两次 ICE 重连，主动断开立即停止。
+- 新增常用设备备注和收藏，不记住对方密码。新增信令 / TURN 检测和脱敏连接诊断。
+- 连接中点击“工具”使用双向文本剪贴板和文件传输；双方都需 v0.5.0。文本同步默认关闭、两端都开启后生效，单次最多 64 KiB。
+- 普通文件逐个发送，最大 2 GB；接收确认、进度、取消、同名自动改名。可在本机“文件接收与剪贴板设置”预先选目录并启用自动接收。文件限速、分块传输，不自动打开；暂不支持文件夹和断点续传。
 
 ## 软件更新
 
@@ -27,7 +31,7 @@ v0.2.2 及以前需手动安装 v0.3.0 一次。安装版启动 15 秒后检查�
 
 - 一次共享 1–2 个实际显示器，两路独立视频，支持并排显示、单屏切换、全屏。
 - 鼠标移动、左右键、中键、滚轮、拖动、键盘组合键；支持中文文本主动发送。
-- 四档画质上限和自适应传输；显示实际分辨率、解码帧率、接收码率、往返延迟及直连/中继状态。
+- 自动画质与四档手动上限；显示实际分辨率、解码帧率、接收码率、往返延迟及直连/中继状态。
 - 固定 9 位设备码、自设连接密码（8–128 字符），区分大小写；错误尝试有频率限制。
 - 无人值守支持密码验证后自动连接、托盘常驻、断网重连、重启恢复。安装版支持 Windows 登录后自启。
 - 自动检查 GitHub 新版，安装版支持程序内下载及重启安装；连接中禁止安装。
@@ -80,8 +84,9 @@ npm.cmd start
 
 | 档位 | 单屏分辨率上限 | 帧率上限 | 视频总码率上限 | 用途 |
 | --- | --- | --- | --- | --- |
+| 自动 | 1920 × 1080 | 30 fps | 1.5–12 Mbps，初始 8 Mbps | 默认，按带宽与编码负载调整 |
 | 低带宽 | 1280 × 720 | 30 fps | 1.5 Mbps | 网络拥塞时降低开销 |
-| 流畅 | 1920 × 1080 | 30 fps | 4 Mbps | 默认，优先响应 |
+| 流畅 | 1920 × 1080 | 30 fps | 4 Mbps | 固定上限，优先响应 |
 | 高清 | 2560 × 1440 | 60 fps | 12 Mbps | 文字与日常操作 |
 | 原画 | 3840 × 2160 | 60 fps | 25 Mbps | 高分辨率屏幕、带宽充足 |
 
@@ -95,7 +100,7 @@ Chromium 自动协商双方支持的编码器并在可用时采用硬件加速�
 npm.cmd run dist
 ```
 
-输出安装版 `dist/Y-Desk-Setup-0.4.0-win-x64.exe` 和免安装版 `dist/Y-Desk-0.4.0-win-x64.exe`。均包含运行时和输入组件，目标 Windows 不需要安装 Node.js。未配置商业代码签名，首次打开可能出现 Windows SmartScreen 提示。不要上传 `node_modules` 或构建缓存到 Git。
+输出安装版 `dist/Y-Desk-Setup-0.5.0-win-x64.exe` 和免安装版 `dist/Y-Desk-0.5.0-win-x64.exe`。均包含运行时和输入组件，目标 Windows 不需要安装 Node.js。未配置商业代码签名，首次打开可能出现 Windows SmartScreen 提示。不要上传 `node_modules` 或构建缓存到 Git。
 
 推送 `main` 自动构建；推送 `v*` 标签会在构建成功后自动创建 GitHub Release，上传安装版、免安装版和 `SHA256SUMS.txt`，其他电脑可直接下载，无需下载源码或登录 Actions。
 

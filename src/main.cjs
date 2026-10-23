@@ -10,6 +10,7 @@ const { serverUrl, iceServers, relayServers, normalizeInput, QUALITY } = require
 const { passwordKey, validatePassword } = require('./auth.cjs');
 const { settingsStore } = require('./settings.cjs');
 const { createUpdates } = require('./updates.cjs');
+const { createSessionTools } = require('./session-tools.cjs');
 
 const testMode = !app.isPackaged && process.env.YDESK_TEST_MODE === '1';
 if (testMode && process.env.YDESK_PROFILE) app.setPath('userData', process.env.YDESK_PROFILE);
@@ -25,6 +26,8 @@ app.on('second-instance', () => { if (window) { window.show(); window.focus(); }
 const pageUrl = pathToFileURL(join(__dirname, 'renderer/index.html')).href;
 const screenPageUrl = pathToFileURL(join(__dirname, 'renderer/screen.html')).href;
 let screenWindow;
+let sessionTools;
+let viewerTarget;
 const emit = message => { if (window && !window.isDestroyed()) window.webContents.send('event', message); };
 
 function send(message) {
@@ -42,6 +45,8 @@ function stopInput() {
   }
 }
 function stopSession() {
+  viewerTarget = null;
+  void sessionTools?.clear();
   screenWindow?.close();
   stopInput();
   sessionId = pendingId = approvedId = null;
@@ -118,6 +123,25 @@ function trusted(event) {
   }
 }
 function handle(name, fn) { ipcMain.handle(name, async (event, ...args) => { trusted(event); return fn(...args); }); }
+handle('tools', (op, args) => sessionTools.call(op, args));
+handle('record-connected', () => {
+  if (!hosting && sessionId && viewerTarget) { sessionTools.record(viewerTarget.id, viewerTarget.url); viewerTarget = null; }
+});
+handle('local-displays', () => screen.getAllDisplays().map(display => ({ id: display.id, name: display.label || `显示器 ${display.id}`, primary: display.id === screen.getPrimaryDisplay().id })));
+handle('place-screen', ({ target, displayId }) => {
+  if (!sessionId || hosting) throw new Error('请先连接远程桌面');
+  const display = screen.getAllDisplays().find(item => item.id === displayId);
+  const targetWindow = target === 'second' ? screenWindow : target === 'main' ? window : null;
+  if (!display || !targetWindow || targetWindow.isDestroyed()) throw new Error('显示器或窗口已不可用');
+  targetWindow.setFullScreen(false); targetWindow.setBounds(display.workArea); return true;
+});
+handle('test-server', raw => new Promise(resolve => {
+  const ws = new WebSocket(serverUrl(raw), { handshakeTimeout: 8000, maxPayload: 1024, perMessageDeflate: false });
+  let settled = false;
+  const finish = ok => { if (settled) return; settled = true; clearTimeout(timer); ws.terminate(); resolve(ok); };
+  const timer = setTimeout(() => finish(false), 9000);
+  ws.once('open', () => finish(true)); ws.once('error', () => finish(false)); ws.once('close', () => finish(false));
+}));
 
 async function listScreens() {
   const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 320, height: 180 } });
@@ -213,6 +237,7 @@ async function connectTo(options, retry = false) {
         blocker = powerSaveBlocker.start('prevent-display-sleep');
         message.screens = allowedDisplays.map(({ thumbnail, ...display }) => display);
         message.ice = ice;
+        if (!hosting) viewerTarget = { id: options.id, url };
       }
       if (message.type === 'signal' && message.session !== sessionId) return;
       if (message.type === 'ended') {
@@ -297,6 +322,9 @@ ipcMain.on('input', (event, message) => {
 app.whenReady().then(() => {
   store = settingsStore(join(app.getPath('userData'), 'settings.bin'), safeStorage);
   profile = store.load();
+  sessionTools = createSessionTools({ dialog, clipboard, window: () => window,
+    session: () => sessionId && (!hosting || approvedId === sessionId) ? sessionId : null,
+    profile: () => profile, save: next => { store.save(next); profile = next; }, downloads: () => app.getPath('downloads') });
   // 第一次运行就固定设备身份；密码只在用户开启无人值守后保存。
   store.save(profile);
   updates = createUpdates({
@@ -364,6 +392,14 @@ app.whenReady().then(() => {
     scheduleReconnect('桌面已恢复');
   });
   for (const event of ['display-added', 'display-removed', 'display-metrics-changed']) screen.on(event, () => {
+    for (const item of [window, screenWindow]) {
+      if (!item || item.isDestroyed()) continue;
+      const bounds = item.getBounds();
+      if (!screen.getAllDisplays().some(display => bounds.x < display.bounds.x + display.bounds.width && bounds.x + bounds.width > display.bounds.x && bounds.y < display.bounds.y + display.bounds.height && bounds.y + bounds.height > display.bounds.y)) {
+        item.setFullScreen(false); item.setBounds(screen.getPrimaryDisplay().workArea);
+      }
+    }
+    emit({ type: 'local-displays-changed' });
     if (hosting || desired) {
       disconnect();
       if (desired) scheduleReconnect('显示器布局变化，正在重新读取');

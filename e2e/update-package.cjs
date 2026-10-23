@@ -47,6 +47,7 @@ const { passwordKey } = require('../src/auth.cjs');
     }, { url: `http://127.0.0.1:${server.address().port}`, cache: join(profile, 'update-cache') });
     assert.deepEqual(config, { autoDownload: false, autoInstallOnAppQuit: false });
     const page = await app.firstWindow();
+    await page.locator('#network-settings').evaluate(element => { element.open = true; });
     await page.locator('.screen-card').first().waitFor();
     await page.locator('#check-update').click();
     await expect(page.locator('#update-message')).toContainText(`v${nextVersion}`);

@@ -16,6 +16,8 @@ test('无人值守：密码、托盘、加密保存、重启、断网重连和�
     delete env.ELECTRON_RUN_AS_NODE;
     const app = await electron.launch({ args: ['.'], env }); apps.push(app);
     const page = await app.firstWindow();
+    await app.evaluate(({ BrowserWindow }) => { BrowserWindow.getAllWindows().forEach(window => window.showInactive()); });
+    await page.locator('#network-settings').evaluate(element => { element.open = true; });
     await expect(page.locator('.screen-card').first()).toBeVisible();
     return { app, page };
   };
@@ -50,7 +52,7 @@ test('无人值守：密码、托盘、加密保存、重启、断网重连和�
     await viewer.page.locator('#join').click();
     await expect(viewer.page.locator('#status')).toHaveText(/已连接/, { timeout: 30000 });
     await expect(host.page.locator('#request')).toBeHidden();
-    await expect.poll(() => viewer.page.locator('video').evaluateAll(items => items.length > 0 && items.every(video => video.videoWidth > 0))).toBe(true);
+    await expect.poll(() => viewer.page.locator('video').evaluateAll(items => items.length > 0 && items.every(video => video.videoWidth > 0)), { timeout: 20000 }).toBe(true);
     await server.close();
     await expect(host.page.locator('#status')).toHaveText(/等待恢复/, { timeout: 10000 });
     server = createSignalingServer({ port, statePath }); await server.listen();

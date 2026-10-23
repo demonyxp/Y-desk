@@ -1,6 +1,7 @@
 'use strict';
 
 const QUALITY = Object.freeze({
+  auto: { label: '自动', width: 1920, height: 1080, fps: 30, bitrate: 8_000_000, hint: 'motion' },
   economy: { label: '低带宽', width: 1280, height: 720, fps: 30, bitrate: 1_500_000, hint: 'motion' },
   smooth: { label: '流畅', width: 1920, height: 1080, fps: 30, bitrate: 4_000_000, hint: 'motion' },
   balanced: { label: '高清', width: 2560, height: 1440, fps: 60, bitrate: 12_000_000, hint: 'detail' },

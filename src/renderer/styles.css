@@ -137,3 +137,30 @@ body.sharing-mode .host-actions { grid-column:1; grid-row:4; }
 body.sharing-mode .identity { grid-column:2; grid-row:2 / 5; margin:0; padding:0 0 0 24px; border-bottom:0; border-left:1px solid var(--line); }
 @media(max-width:1000px) { main { padding:22px; } .app-header { padding:0 24px; } .panel { padding:19px; } .session-toolbar { flex-wrap:wrap; } .screen-symbol { padding-right:0; } }
 @media(prefers-reduced-motion:reduce) { * { transition:none!important; } }
+.intro h1 { font-size:24px; margin:0; }
+.intro { margin-bottom:18px; }
+.network-check,.file-actions,.tools-heading { display:flex; align-items:center; gap:12px; margin:12px 0; }
+.network-check span { font-size:12px; }
+.device-history { margin-top:20px; border-top:1px solid var(--line); padding-top:14px; }
+#device-list { max-height:210px; overflow:auto; margin-top:10px; }
+.device-row { display:flex; align-items:center; gap:6px; margin:6px 0; }
+.device-row input { min-width:70px; margin:0; flex:1; }
+.device-row button { padding:8px; white-space:nowrap; }
+.session-controls { flex-wrap:wrap; justify-content:flex-end; }
+.session-controls .compact select { max-width:170px; }
+.session-toolbar>div:first-child { flex-shrink:0; }
+.session-tools { position:fixed; right:20px; bottom:24px; width:min(470px,calc(100vw - 40px)); max-height:80vh; overflow:auto; z-index:20; box-shadow:0 8px 32px #12263b30; }
+.tools-heading { justify-content:space-between; margin-top:0; }
+.session-tools details { margin-top:16px; }
+.session-tools p { overflow-wrap:anywhere; font-size:12px; }
+.remote-screen.original-size { overflow:auto; display:block; }
+.remote-screen.original-size video { max-width:none; min-height:0; flex:none; object-fit:fill; }
+body.session-fullscreen .session-toolbar,.screen-window.native-fullscreen .screen-window-toolbar { position:absolute; top:0; left:0; right:0; z-index:10; background:var(--pale); color:var(--ink); padding:10px 14px; box-shadow:0 2px 12px #12263b25; transition:transform .15s; }
+body.session-fullscreen.toolbar-hidden .session-toolbar,.screen-window.native-fullscreen.toolbar-hidden .screen-window-toolbar { transform:translateY(-100%); }
+body.session-fullscreen .session-footer { display:none; }
+.screen-window-toolbar { flex-wrap:wrap; }
+.screen-window-toolbar label { font-size:10px; }
+.screen-window-toolbar select { padding:6px; margin-top:2px; max-width:190px; }
+.screen-window.native-fullscreen main { padding:0; }
+#host-tools { margin-top:12px; }
+@media(max-width:1100px) { .session-toolbar { align-items:flex-start; } .session-controls { gap:6px; } .session-controls button { padding:8px; } }

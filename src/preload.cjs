@@ -1,6 +1,11 @@
 'use strict';
 const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('ydesk', {
+  tools: (op, args) => ipcRenderer.invoke('tools', op, args),
+  localDisplays: () => ipcRenderer.invoke('local-displays'),
+  placeScreen: options => ipcRenderer.invoke('place-screen', options),
+  testServer: url => ipcRenderer.invoke('test-server', url),
+  recordConnected: () => ipcRenderer.invoke('record-connected'),
   screens: () => ipcRenderer.invoke('screens'),
   qualities: () => ipcRenderer.invoke('qualities'),
   settings: () => ipcRenderer.invoke('settings'),

@@ -14,6 +14,7 @@ test('中继表单自动生成配置、加密保存、重启回填并保留高�
   const launch = async () => {
     app = await electron.launch({ args: ['.'], env });
     const page = await app.firstWindow();
+    await page.locator('#network-settings').evaluate(element => { element.open = true; });
     await expect(page.locator('.screen-card').first()).toBeVisible();
     return page;
   };

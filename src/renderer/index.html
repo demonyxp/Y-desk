@@ -6,6 +6,8 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' blob:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <title>Y-Desk · 双屏远程桌面</title>
   <link rel="stylesheet" href="styles.css">
+  <script src="performance.js" defer></script>
+  <script src="session-tools.js" defer></script>
   <script src="renderer.js" defer></script>
 </head>
 <body>
@@ -19,11 +21,11 @@
       <div class="update-actions"><button id="download-update" class="secondary" hidden>下载更新</button><button id="install-update" class="primary" hidden>重启并安装</button><button id="update-page" class="secondary" hidden>前往下载页</button><button id="dismiss-update" class="text-button" aria-label="收起更新提示">收起</button></div>
     </section>
     <section id="setup">
-      <div class="intro"><div><p class="eyebrow">你的桌面，触手可及</p><h1>跨越距离，保留细节。</h1><p>共享正在使用的桌面。单屏专注，双屏协作。</p></div><div class="screen-symbol" aria-hidden="true"><span></span><span></span></div></div>
-      <details class="network" id="network-settings" open>
+      <div class="intro"><h1>我的远程桌面</h1><p>共享这台电脑，或连接常用设备。</p></div>
+      <details class="network" id="network-settings">
         <summary>连接服务器 <span id="server-summary">首次使用，请配置同一个服务器</span></summary>
         <div class="network-fields">
-          <label>信令服务器<input id="server" placeholder="wss://desk.example.com" value="ws://127.0.0.1:21120" spellcheck="false"></label>
+          <label>信令服务器<input id="server" placeholder="wss://desk.example.com" value="wss://desk.yinsane.xyz" spellcheck="false"></label>
           <label>中继地址 <span class="muted">留空使用信令服务器的域名</span><input id="relay-address" placeholder="自动使用左侧域名，端口 3478" spellcheck="false"></label>
           <label>中继账号<input id="relay-user" placeholder="例如 ydesk" autocomplete="off" spellcheck="false"></label>
           <label>中继密码<input id="relay-password" type="password" placeholder="安装 coturn 时设置的密码" autocomplete="off"></label>
@@ -31,6 +33,7 @@
         <p class="hint">连接时优先直连，无法直连才使用中继。账号和密码同时留空可仅使用直连；连接后配置加密保存在本机。</p>
         <label class="toggle-line"><input id="advanced-network" type="checkbox">高级配置：手动填写 STUN / TURN JSON</label>
         <label id="advanced-ice" hidden>STUN / TURN 配置<textarea id="ice" rows="3" spellcheck="false" placeholder='[{"urls":"stun:stun.example.com:3478"}]'></textarea></label>
+        <div class="network-check"><button id="test-network" class="secondary">检测连接</button><span id="network-result" role="status"></span></div>
       </details>
       <div class="connection-grid">
         <section class="panel host-panel">
@@ -47,6 +50,7 @@
             <label class="toggle-line"><input id="unattended" type="checkbox">无人值守：密码正确即可连接，无需本机确认</label>
             <label class="toggle-line"><input id="auto-start" type="checkbox" disabled>Windows 登录后自动启动</label>
             <p id="auto-start-hint" class="hint">安装版支持登录自启；关闭窗口后，无人值守保留在系统托盘。</p>
+            <button id="settings-tools" class="text-button">文件接收与剪贴板设置</button>
           </div>
           <div class="host-actions"><button id="share" class="primary">开启共享</button><button id="refresh" class="text-button">刷新屏幕</button></div>
         </section>
@@ -57,6 +61,7 @@
             <label>连接密码<input id="remote-password" placeholder="对方设置的密码，区分大小写" type="password" minlength="8" maxlength="128" required autocomplete="off"></label>
             <button id="join" class="primary" type="submit">连接桌面 <span aria-hidden="true">→</span></button>
           </form>
+          <details class="device-history" open><summary>常用设备与最近连接</summary><div id="device-list" class="hint"></div></details>
           <div class="privacy-note"><span aria-hidden="true">◎</span><p>普通模式需要对方允许；无人值守自动连接。<br>连接中，双方随时可以结束。</p></div>
         </section>
       </div>
@@ -66,15 +71,30 @@
       <div><strong>有人请求查看并控制你的桌面</strong><p>请先通过电话或聊天确认对方身份。允许后将共享选中的屏幕及键盘鼠标控制权。</p></div>
       <button id="reject" class="secondary">拒绝</button><button id="accept" class="primary">允许本次连接</button>
     </section>
-    <section id="host-active" class="host-active" hidden><div class="live-dot"></div><div><h2>你的桌面正在共享</h2><p>对方可以查看和控制选中的显示器。本机仍可正常操作。</p><p class="hint">紧急停止并退出：Ctrl + Alt + F12</p></div></section>
+    <section id="host-active" class="host-active" hidden><div class="live-dot"></div><div><h2>你的桌面正在共享</h2><p>对方可以查看和控制选中的显示器。本机仍可正常操作。</p><p class="hint">紧急停止并退出：Ctrl + Alt + F12</p><button id="host-tools" class="secondary" disabled>文件与剪贴板</button></div></section>
+
+    <aside id="session-tools" class="session-tools panel" hidden aria-label="会话工具">
+      <div class="tools-heading"><h2>会话工具</h2><button id="tools-close" class="text-button">收起</button></div>
+      <p id="tools-status" class="hint">对方需使用 v0.5.0 或更新版本</p>
+      <label class="toggle-line"><input id="clipboard-enable" type="checkbox">允许同步本机文本剪贴板（双方开启生效）</label>
+      <p class="hint">仅同步开启后复制的文本，单次最多 64 KiB。</p>
+      <div class="file-actions"><button id="send-file" class="secondary" disabled>发送文件</button><button id="cancel-file" class="text-button" disabled>取消传输</button></div>
+      <p id="transfer-progress" role="status">没有进行中的传输</p>
+      <details><summary>接收设置</summary><button id="receive-folder" class="text-button">选择接收目录</button><p id="receive-path" class="hint"></p><label class="toggle-line"><input id="auto-receive" type="checkbox">授权会话中自动接收到上述目录</label><p class="hint">未开启时逐个确认。文件上限 2 GB，同名自动改名，不自动打开。</p></details>
+      <p id="performance-detail" class="hint"></p><button id="export-diagnostics" class="text-button" disabled>导出连接诊断</button>
+    </aside>
 
     <section id="session" hidden>
       <div class="session-toolbar">
         <div><h2>远程桌面</h2><span id="session-detail" class="muted">正在建立视频连接…</span></div>
         <div class="session-controls">
           <label class="compact">显示<select id="layout"><option value="all">双屏并排</option></select></label>
-          <label class="compact">画质<select id="quality"><option value="economy">低带宽 · 720p / 30</option><option value="smooth" selected>流畅 · 1080p / 30</option><option value="balanced">高清 · 1440p / 60</option><option value="ultra">原画 · 4K / 60</option></select></label>
+          <label class="compact">画质<select id="quality"><option value="auto" selected>自动 · 1080p / 30</option><option value="economy">低带宽 · 720p / 30</option><option value="smooth">流畅 · 1080p / 30</option><option value="balanced">高清 · 1440p / 60</option><option value="ultra">原画 · 4K / 60</option></select></label>
+          <label class="compact">缩放<select id="scale"><option value="fit">适应窗口</option><option value="original">原始大小</option></select></label>
+          <label class="compact">本地屏幕<select id="local-display"><option value="">移动到显示器…</option></select></label>
           <button id="separate-screen" class="secondary" disabled>双屏分窗</button>
+          <button id="swap-screens" class="secondary" disabled>交换双屏</button>
+          <button id="tools-toggle" class="secondary" disabled>工具</button>
           <button id="control-toggle" class="secondary" aria-pressed="true">控制已开启</button>
           <button id="fullscreen" class="secondary">全屏</button>
           <button id="disconnect-session" class="danger">断开</button>
@@ -86,6 +106,6 @@
     </section>
     <div class="bottom-actions"><p id="notice" role="status" aria-live="polite">画面经 WebRTC 加密传输。实际清晰度与流畅度取决于网络及硬件。</p><button id="stop" class="danger" hidden>停止共享 / 断开</button></div>
   </main>
-  <footer class="app-footer"><span>Y-DESK / WINDOWS</span><span>双屏 · 实时 · 由你掌控</span><span>v0.4.0</span></footer>
+  <footer class="app-footer"><span>Y-DESK / WINDOWS</span><span>双屏 · 实时 · 由你掌控</span><span>v0.5.0</span></footer>
 </body>
 </html>
